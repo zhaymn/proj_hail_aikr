@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Research Agent — Your Research Papers, Interrogated.</title>
+  <meta name="description" content="Upload PDFs. Ask grounded questions. Compare claims. Draft in your voice. Full citation traceability on every answer." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #050709;
+      --surface: #0d1117;
+      --surface-2: #161b22;
+      --surface-3: #1c2333;
+      --border: rgba(255,255,255,0.06);
+      --border-2: rgba(255,255,255,0.1);
+      --text: #f0f2f5;
+      --text-muted: #8b949e;
+      --text-dim: #6e7681;
+      --green: #00ff9f;
+      --green-dim: rgba(0,255,159,0.15);
+      --green-glow: rgba(0,255,159,0.3);
+      --blue: #60a5fa;
+      --purple: #a78bfa;
+      --teal: #34d399;
+      --orange: #fb923c;
+      --pink: #f472b6;
+      --red: #f87171;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      padding: 16px 48px;
+      display: flex; justify-content: space-between; align-items: center;
+      background: rgba(5,7,9,0.8);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-left { display: flex; align-items: center; gap: 12px; }
+    .nav-logo-icon {
+      width: 36px; height: 36px; border-radius: 10px;
+      background: linear-gradient(135deg, var(--green), #34d399);
+      display: grid; place-items: center;
+      font-weight: 800; font-size: 13px; color: #021a0f;
+      box-shadow: 0 0 20px var(--green-dim);
+    }
+    .nav-title { font-size: 16px; font-weight: 700; letter-spacing: -0.02em; }
+    .nav-right { display: flex; align-items: center; gap: 24px; }
+    .nav-link { color: var(--text-muted); text-decoration: none; font-size: 14px; font-weight: 500; transition: color 0.2s; }
+    .nav-link:hover { color: #fff; }
+    .btn-cta {
+      background: linear-gradient(135deg, var(--green), #34d399);
+      color: #021a0f; border: none; padding: 10px 22px; border-radius: 10px;
+      font-size: 14px; font-weight: 700; cursor: pointer; text-decoration: none;
+      transition: all 0.25s cubic-bezier(0.16,1,0.3,1);
+      box-shadow: 0 0 20px var(--green-dim);
+    }
+    .btn-cta:hover { box-shadow: 0 0 36px var(--green-glow); transform: translateY(-1px); }
+
+    .hero {
+      position: relative;
+      min-height: 100vh;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      text-align: center;
+      padding: 140px 24px 80px;
+      overflow: hidden;
+    }
+    #heroCanvas {
+      position: absolute; inset: 0; z-index: 0;
+    }
+    .hero-content { position: relative; z-index: 1; max-width: 800px; }
+    .badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 8px 20px; border-radius: 99px;
+      background: rgba(0,255,159,0.08);
+      border: 1px solid rgba(0,255,159,0.2);
+      font-size: 12px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+      color: var(--green); margin-bottom: 32px;
+    }
+    .badge::before {
+      content: ''; width: 8px; height: 8px; border-radius: 50%;
+      background: var(--green); box-shadow: 0 0 8px var(--green);
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+    @keyframes pulse-dot { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+    .hero h1 {
+      font-size: clamp(3rem, 6vw, 4.8rem);
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      line-height: 1.05;
+      margin-bottom: 28px;
+    }
+    .hero h1 .gradient {
+      background: linear-gradient(135deg, var(--green), #34d399, #60a5fa);
+      -webkit-background-clip: text; background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .hero-sub {
+      font-size: 18px; color: var(--text-muted);
+      max-width: 580px; margin: 0 auto 40px; line-height: 1.7;
+    }
+    .hero-search {
+      display: flex; align-items: center; gap: 12px;
+      max-width: 560px; margin: 0 auto 36px;
+      padding: 14px 20px; border-radius: 14px;
+      background: var(--surface);
+      border: 1px solid var(--border-2);
+      transition: border-color 0.3s;
+    }
+    .hero-search:focus-within { border-color: rgba(0,255,159,0.3); }
+    .hero-search svg { color: var(--text-dim); flex-shrink: 0; }
+    .hero-search input {
+      flex: 1; background: none; border: none; outline: none;
+      color: var(--text); font-size: 15px; font-family: inherit;
+    }
+    .hero-search input::placeholder { color: var(--text-dim); }
+
+    .hero-buttons { display: flex; gap: 16px; justify-content: center; margin-bottom: 64px; }
+    .btn-primary {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: linear-gradient(135deg, var(--green), #34d399);
+      color: #021a0f; border: none; padding: 14px 32px; border-radius: 12px;
+      font-size: 15px; font-weight: 700; cursor: pointer; text-decoration: none;
+      transition: all 0.25s cubic-bezier(0.16,1,0.3,1);
+      box-shadow: 0 8px 32px rgba(0,255,159,0.2);
+    }
+    .btn-primary:hover { box-shadow: 0 12px 48px rgba(0,255,159,0.35); transform: translateY(-2px); }
+    .btn-secondary {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: var(--surface); border: 1px solid var(--border-2);
+      color: var(--text); padding: 14px 32px; border-radius: 12px;
+      font-size: 15px; font-weight: 600; cursor: pointer; text-decoration: none;
+      transition: all 0.25s cubic-bezier(0.16,1,0.3,1);
+    }
+    .btn-secondary:hover { background: var(--surface-2); border-color: rgba(255,255,255,0.15); transform: translateY(-1px); }
+
+    .stats-row {
+      display: flex; gap: 48px; justify-content: center; flex-wrap: wrap;
+    }
+    .stat { text-align: center; }
+    .stat-value {
+      font-size: 2.5rem; font-weight: 800; letter-spacing: -0.04em;
+      color: var(--green);
+    }
+    .stat-label {
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.14em; color: var(--text-dim); margin-top: 4px;
+    }
+
+    section { padding: 120px 48px; max-width: 1200px; margin: 0 auto; }
+    .section-eyebrow {
+      font-size: 12px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.16em; color: var(--green); text-align: center; margin-bottom: 20px;
+    }
+    .section-title {
+      font-size: clamp(2rem, 4vw, 3.2rem);
+      font-weight: 800; letter-spacing: -0.04em; text-align: center;
+      margin-bottom: 20px; line-height: 1.1;
+    }
+    .section-title .accent-green { color: var(--green); }
+    .section-title .accent-orange { color: var(--orange); }
+    .section-sub {
+      font-size: 16px; color: var(--text-muted); text-align: center;
+      max-width: 580px; margin: 0 auto 64px; line-height: 1.7;
+    }
+
+    .mode-tabs {
+      display: flex; justify-content: center; gap: 8px; flex-wrap: wrap;
+      margin-bottom: 48px;
+    }
+    .mode-tab {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 20px; border-radius: 12px;
+      background: transparent; border: 1px solid var(--border);
+      color: var(--text-muted); font-size: 14px; font-weight: 500;
+      cursor: pointer; transition: all 0.3s cubic-bezier(0.16,1,0.3,1);
+    }
+    .mode-tab:hover { background: rgba(255,255,255,0.03); color: var(--text); }
+    .mode-tab.active { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.15); color: #fff; font-weight: 700; }
+    .mode-tab-icon {
+      width: 32px; height: 32px; border-radius: 9px;
+      display: grid; place-items: center;
+      font-size: 12px; font-weight: 800; color: #fff;
+    }
+
+    .mode-detail {
+      background: var(--surface);
+      border: 1px solid var(--border-2);
+      border-radius: 20px;
+      padding: 40px; max-width: 800px; margin: 0 auto;
+      position: relative; overflow: hidden;
+      transition: all 0.4s cubic-bezier(0.16,1,0.3,1);
+    }
+    .mode-detail-top-line {
+      position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    }
+    .mode-detail-header { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
+    .mode-detail-icon {
+      width: 48px; height: 48px; border-radius: 14px;
+      display: grid; place-items: center;
+      font-size: 16px; font-weight: 800; color: #fff;
+    }
+    .mode-detail h3 { font-size: 22px; font-weight: 700; }
+    .mode-detail .mode-subtitle { font-size: 14px; font-weight: 600; margin-top: 2px; }
+    .mode-detail p { color: var(--text-muted); font-size: 15px; line-height: 1.7; margin-bottom: 32px; }
+    .queries-label {
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.14em; color: var(--text-dim); margin-bottom: 16px;
+    }
+    .query-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 14px 18px; border-radius: 12px;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--border);
+      margin-bottom: 10px; font-size: 14px; color: var(--text-muted);
+      transition: all 0.2s;
+    }
+    .query-item:hover { background: rgba(255,255,255,0.04); border-color: var(--border-2); color: var(--text); }
+    .query-num { font-size: 12px; font-weight: 700; opacity: 0.4; }
+
+    .trial-cards {
+      display: grid; grid-template-columns: 1fr 1.2fr 1fr; gap: 24px;
+      max-width: 1000px; margin: 0 auto;
+    }
+    .trial-card {
+      padding: 32px; border-radius: 20px;
+      background: var(--surface);
+      border: 1px solid var(--border-2);
+      display: flex; flex-direction: column;
+    }
+    .trial-card.judge {
+      border-color: rgba(0,255,159,0.2);
+      box-shadow: 0 8px 40px rgba(0,255,159,0.06);
+    }
+    .trial-icon {
+      width: 48px; height: 48px; border-radius: 14px;
+      display: grid; place-items: center; margin-bottom: 20px;
+    }
+    .trial-card h3 { font-size: 18px; font-weight: 700; margin-bottom: 12px; }
+    .trial-card p { font-size: 14px; color: var(--text-muted); line-height: 1.6; margin-bottom: 24px; }
+    .verdict-badge {
+      display: inline-block; padding: 4px 14px; border-radius: 6px;
+      background: rgba(0,255,159,0.12); border: 1px solid rgba(0,255,159,0.2);
+      color: var(--green); font-size: 11px; font-weight: 700;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      margin-bottom: 16px; text-align: center;
+    }
+    .trial-bullet {
+      display: flex; align-items: center; gap: 10px;
+      font-size: 13px; margin-bottom: 10px;
+    }
+    .trial-bullet-dot {
+      width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+    }
+    .trial-bullet.red .trial-bullet-dot { background: var(--red); box-shadow: 0 0 8px rgba(248,113,113,0.4); }
+    .trial-bullet.red { color: var(--red); }
+    .trial-bullet.blue .trial-bullet-dot { background: var(--blue); box-shadow: 0 0 8px rgba(96,165,250,0.4); }
+    .trial-bullet.blue { color: var(--blue); }
+    .trial-bullet.green .trial-bullet-dot { background: var(--green); box-shadow: 0 0 8px rgba(0,255,159,0.4); }
+    .trial-bullet.green { color: var(--green); }
+
+    .pipeline-bg {
+      background: var(--surface);
+      border-radius: 24px;
+      border: 1px solid var(--border);
+      padding: 48px 32px;
+    }
+    .pipeline-steps {
+      display: flex; justify-content: center; align-items: flex-start; gap: 12px; flex-wrap: wrap;
+    }
+    .pipeline-step {
+      display: flex; flex-direction: column; align-items: center;
+      padding: 24px 16px; border-radius: 16px;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--border);
+      width: 160px; text-align: center;
+      transition: all 0.3s;
+    }
+    .pipeline-step:hover { background: rgba(255,255,255,0.04); border-color: var(--border-2); transform: translateY(-4px); }
+    .pipeline-num { font-size: 12px; font-weight: 700; color: var(--green); margin-bottom: 16px; }
+    .pipeline-icon {
+      width: 48px; height: 48px; border-radius: 14px;
+      background: rgba(0,255,159,0.08); border: 1px solid rgba(0,255,159,0.15);
+      display: grid; place-items: center; margin-bottom: 16px;
+      color: var(--green); font-size: 20px;
+    }
+    .pipeline-step h4 { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+    .pipeline-step span { font-size: 12px; color: var(--text-dim); }
+    .pipeline-arrow {
+      display: flex; align-items: center; justify-content: center;
+      color: var(--text-dim); font-size: 18px; padding-top: 60px;
+    }
+
+    .footer {
+      border-top: 1px solid var(--border);
+      padding: 48px;
+      text-align: center; color: var(--text-dim); font-size: 13px;
+    }
+    .footer a { color: var(--green); text-decoration: none; }
+
+    @media (max-width: 900px) {
+      .nav { padding: 14px 20px; }
+      section { padding: 80px 20px; }
+      .trial-cards { grid-template-columns: 1fr; }
+      .pipeline-steps { flex-direction: column; align-items: center; }
+      .pipeline-arrow { display: none; }
+      .pipeline-step { width: 100%; max-width: 240px; }
+      .stats-row { gap: 24px; }
+      .hero-buttons { flex-direction: column; align-items: center; }
+    }
+    @media (max-width: 600px) {
+      .hero h1 { font-size: 2.4rem; }
+      .nav-link { display: none; }
+      .mode-tabs { gap: 6px; }
+      .mode-tab { padding: 8px 12px; font-size: 12px; }
+    }
+  </style>
+</head>
+<body>
+
+  <nav class="nav">
+    <div class="nav-left">
+      <div class="nav-logo-icon">RA</div>
+      <div class="nav-title">Research Agent</div>
+    </div>
+    <div class="nav-right">
+      <a href="#modes" class="nav-link">Features</a>
+      <a href="#pipeline" class="nav-link">How It Works</a>
+      <a href="#reviewer" class="nav-link">Reviewer</a>
+      <a href="/dashboard" class="btn-cta">Get started</a>
+    </div>
+  </nav>
+
+  <div class="hero">
+    <canvas id="heroCanvas"></canvas>
+    <div class="hero-content">
+      <div class="badge">LangGraph-Powered</div>
+      <h1>Your research papers,<br/><span class="gradient">interrogated.</span></h1>
+      <p class="hero-sub">Upload PDFs. Ask grounded questions. Compare claims. Draft in your voice.<br/>Full citation traceability on every answer.</p>
+
+      <div class="hero-search">
+        <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" placeholder="Draft a research summary..." id="heroInput" />
+      </div>
+
+      <div class="hero-buttons">
+        <a href="/dashboard" class="btn-primary">Start researching <span>→</span></a>
+        <a href="https://github.com" class="btn-secondary" target="_blank">View on GitHub</a>
+      </div>
+
+      <div class="stats-row">
+        <div class="stat"><div class="stat-value">5</div><div class="stat-label">Specialized Modes</div></div>
+        <div class="stat"><div class="stat-value">3</div><div class="stat-label">LLM Providers</div></div>
+        <div class="stat"><div class="stat-value">∞</div><div class="stat-label">Papers Supported</div></div>
+        <div class="stat"><div class="stat-value">&lt;2s</div><div class="stat-label">First Token</div></div>
+      </div>
+    </div>
+  </div>
+
+  <section id="modes">
+    <div class="section-eyebrow">Five Specialized Modes</div>
+    <h2 class="section-title">Every angle of research, <span class="accent-green">covered.</span></h2>
+    <div class="section-sub"></div>
+
+    <div class="mode-tabs" id="modeTabs">
+      <button class="mode-tab active" data-mode="local">
+        <div class="mode-tab-icon" style="background:#60a5fa; color:#0b1120; box-shadow: 0 0 16px rgba(96,165,250,0.4);">L</div>Local Brain
+      </button>
+      <button class="mode-tab" data-mode="global">
+        <div class="mode-tab-icon" style="background:#a78bfa; color:#0b1120; box-shadow: 0 0 16px rgba(167,139,250,0.4);">G</div>Global Brain
+      </button>
+      <button class="mode-tab" data-mode="writer">
+        <div class="mode-tab-icon" style="background:#34d399; color:#0b1120; box-shadow: 0 0 16px rgba(52,211,153,0.4);">W</div>Paper Writer
+      </button>
+      <button class="mode-tab" data-mode="reviewer_tab">
+        <div class="mode-tab-icon" style="background:#fb923c; color:#0b1120; box-shadow: 0 0 16px rgba(251,146,60,0.4);">R</div>Reviewer
+      </button>
+      <button class="mode-tab" data-mode="comparator">
+        <div class="mode-tab-icon" style="background:#f472b6; color:#0b1120; box-shadow: 0 0 16px rgba(244,114,182,0.4);">C</div>Comparator
+      </button>
+    </div>
+
+    <div class="mode-detail" id="modeDetail"></div>
+  </section>
+
+  <section id="reviewer">
+    <div class="section-eyebrow" style="color: var(--orange);">Claim Trial Engine</div>
+    <h2 class="section-title">Your claims, <span class="accent-orange">on trial.</span></h2>
+    <p class="section-sub">The Reviewer mode runs a structured debate — Skeptic vs Advocate — before a Judge delivers the final verdict.</p>
+
+    <div class="trial-cards">
+      <div class="trial-card">
+        <div class="trial-icon" style="background:rgba(248,113,113,0.1); border: 1px solid rgba(248,113,113,0.2);">
+          <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="#f87171" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6M9 9l6 6"/></svg>
+        </div>
+        <h3>Skeptic</h3>
+        <p>Challenges every claim. Probes methodology, statistical validity, and logical consistency.</p>
+        <div class="trial-bullet red"><div class="trial-bullet-dot"></div>Methodology gap detected</div>
+        <div class="trial-bullet red"><div class="trial-bullet-dot"></div>Sample size insufficient</div>
+        <div class="trial-bullet red"><div class="trial-bullet-dot"></div>Causation vs correlation</div>
+      </div>
+      <div class="trial-card judge">
+        <div style="text-align:center;">
+          <div class="verdict-badge">Verdict</div>
+        </div>
+        <div class="trial-icon" style="background:rgba(0,255,159,0.1); border: 1px solid rgba(0,255,159,0.2); margin: 0 auto;">
+          <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="#00ff9f" stroke-width="2"><path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6L5.6 18.4"/></svg>
+        </div>
+        <h3 style="text-align:center;">Judge</h3>
+        <p style="text-align:center;">Weighs evidence from both sides. Delivers a structured verdict with confidence scores.</p>
+        <div class="trial-bullet green" style="justify-content:center;"><div class="trial-bullet-dot"></div>Synthesizes arguments</div>
+        <div class="trial-bullet green" style="justify-content:center;"><div class="trial-bullet-dot"></div>Evaluates robustness</div>
+        <div class="trial-bullet green" style="justify-content:center;"><div class="trial-bullet-dot"></div>Outputs confidence score</div>
+      </div>
+      <div class="trial-card">
+        <div class="trial-icon" style="background:rgba(96,165,250,0.1); border: 1px solid rgba(96,165,250,0.2); margin-left: auto;">
+          <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="#60a5fa" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        </div>
+        <h3 style="text-align:right;">Advocate</h3>
+        <p style="text-align:right;">Defends claims with evidence. Cites supporting data, prior work, and experimental backing.</p>
+        <div class="trial-bullet blue" style="justify-content:flex-end;">Supporting evidence found<div class="trial-bullet-dot"></div></div>
+        <div class="trial-bullet blue" style="justify-content:flex-end;">Prior work corroborates<div class="trial-bullet-dot"></div></div>
+        <div class="trial-bullet blue" style="justify-content:flex-end;">Statistical significance holds<div class="trial-bullet-dot"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="pipeline">
+    <div class="section-eyebrow">Retrieval Pipeline</div>
+    <h2 class="section-title">Every answer, <span class="accent-green">verified.</span></h2>
+    <p class="section-sub">Hybrid retrieval, reranking, and hallucination detection before any answer reaches you.</p>
+
+    <div class="pipeline-bg">
+      <div class="pipeline-steps">
+        <div class="pipeline-step">
+          <div class="pipeline-num">01</div>
+          <div class="pipeline-icon">📄</div>
+          <h4>Upload</h4>
+          <span>Semantic chunking</span>
+        </div>
+        <div class="pipeline-arrow">→</div>
+        <div class="pipeline-step">
+          <div class="pipeline-num">02</div>
+          <div class="pipeline-icon">🔍</div>
+          <h4>Retrieve</h4>
+          <span>Dense + sparse hybrid</span>
+        </div>
+        <div class="pipeline-arrow">→</div>
+        <div class="pipeline-step">
+          <div class="pipeline-num">03</div>
+          <div class="pipeline-icon">⚡</div>
+          <h4>Rerank</h4>
+          <span>Similarity scoring</span>
+        </div>
+        <div class="pipeline-arrow">→</div>
+        <div class="pipeline-step">
+          <div class="pipeline-num">04</div>
+          <div class="pipeline-icon">🧠</div>
+          <h4>Generate</h4>
+          <span>Multi-provider LLM</span>
+        </div>
+        <div class="pipeline-arrow">→</div>
+        <div class="pipeline-step">
+          <div class="pipeline-num">05</div>
+          <div class="pipeline-icon">🛡️</div>
+          <h4>Validate</h4>
+          <span>Hallucination detection</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <p>© 2024 Research Agent. Built with LangGraph, FastAPI, and React.<br/>
+    <a href="/dashboard">Launch the workstation →</a></p>
+  </footer>
+
+  <script>
+    const canvas = document.getElementById('heroCanvas');
+    const ctx = canvas.getContext('2d');
+    let particles = [];
+    const PARTICLE_COUNT = 100;
+    const CONNECTION_DISTANCE = 140;
+
+    let mouse = {
+      x: null,
+      y: null,
+      radius: 170
+    };
+
+    window.addEventListener('mousemove', function(event) {
+      const rect = canvas.getBoundingClientRect();
+      mouse.x = event.clientX - rect.left;
+      mouse.y = event.clientY - rect.top;
+    });
+
+    window.addEventListener('mouseout', function() {
+      mouse.x = undefined;
+      mouse.y = undefined;
+    });
+
+    function resize() {
+      canvas.width = canvas.parentElement.offsetWidth;
+      canvas.height = canvas.parentElement.offsetHeight;
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    class Particle {
+      constructor() {
+        this.x = Math.random() * canvas.width;
+        this.y = Math.random() * canvas.height;
+        this.vx = (Math.random() - 0.5) * 0.4;
+        this.vy = (Math.random() - 0.5) * 0.4;
+        this.baseX = this.x;
+        this.baseY = this.y;
+        this.radius = Math.random() * 3.5 + 1.5;
+        this.density = (Math.random() * 30) + 1;
+      }
+
+      update() {
+        this.x += this.vx;
+        this.y += this.vy;
+
+        if (this.x < 0 || this.x > canvas.width) this.vx *= -1;
+        if (this.y < 0 || this.y > canvas.height) this.vy *= -1;
+
+        if (mouse.x != null && mouse.y != null) {
+          let dx = mouse.x - this.x;
+          let dy = mouse.y - this.y;
+          let distance = Math.sqrt(dx * dx + dy * dy);
+
+          if (distance < mouse.radius) {
+            let forceDirectionX = dx / distance;
+            let forceDirectionY = dy / distance;
+            let force = (mouse.radius - distance) / mouse.radius;
+            let directionX = forceDirectionX * force * this.density * 0.6;
+            let directionY = forceDirectionY * force * this.density * 0.6;
+
+            this.x -= directionX;
+            this.y -= directionY;
+          }
+        }
+      }
+
+      draw() {
+        let opacity = 0.65;
+        let glowMultiplier = 3.5;
+
+        if (mouse.x != null && mouse.y != null) {
+          let dx = mouse.x - this.x;
+          let dy = mouse.y - this.y;
+          let distance = Math.sqrt(dx * dx + dy * dy);
+          if (distance < mouse.radius) {
+             let intensity = (mouse.radius - distance) / mouse.radius;
+             opacity = 0.65 + (intensity * 0.35);
+             glowMultiplier = 3.5 + (intensity * 4);
+          }
+        }
+
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius * glowMultiplier, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(0, 255, 159, ${opacity * 0.12})`;
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius * 1.5, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(0, 255, 159, ${opacity * 0.4})`;
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius * 0.7, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(200, 255, 230, ${opacity})`;
+        ctx.fill();
+      }
+    }
+
+    for (let i = 0; i < PARTICLE_COUNT; i++) particles.push(new Particle());
+
+    function animate() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      for (let i = 0; i < particles.length; i++) {
+        particles[i].update();
+        particles[i].draw();
+
+        for (let j = i + 1; j < particles.length; j++) {
+          const dx = particles[i].x - particles[j].x;
+          const dy = particles[i].y - particles[j].y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+
+          if (dist < CONNECTION_DISTANCE) {
+            ctx.beginPath();
+            ctx.moveTo(particles[i].x, particles[i].y);
+            ctx.lineTo(particles[j].x, particles[j].y);
+            let baseAlpha = 0.12;
+            ctx.strokeStyle = `rgba(0, 255, 159, ${baseAlpha * (1 - dist / CONNECTION_DISTANCE)})`;
+            ctx.lineWidth = 0.6;
+            ctx.stroke();
+          }
+        }
+
+        if (mouse.x != null && mouse.y != null) {
+          const mdx = particles[i].x - mouse.x;
+          const mdy = particles[i].y - mouse.y;
+          const mdist = Math.sqrt(mdx * mdx + mdy * mdy);
+
+          if (mdist < mouse.radius) {
+            ctx.beginPath();
+            ctx.moveTo(particles[i].x, particles[i].y);
+            ctx.lineTo(mouse.x, mouse.y);
+            ctx.strokeStyle = `rgba(0, 255, 159, ${0.4 * (1 - mdist / mouse.radius)})`;
+            ctx.lineWidth = 1;
+            ctx.stroke();
+          }
+        }
+      }
+      requestAnimationFrame(animate);
+    }
+    animate();
+
+    const MODES = {
+      local: {
+        icon: 'L', name: 'Local Brain', subtitle: 'Paper-grounded QA',
+        color: '#00f0ff', rgb: '0,240,255',
+        desc: 'Every answer is citation-backed by your own uploaded library. Zero hallucination by design — the model only reasons over chunks it can verify.',
+        queries: ['Summarize the key findings of paper 2', 'What methodology does the author propose?', 'List all cited datasets with their sizes']
+      },
+      global: {
+        icon: 'G', name: 'Global Brain', subtitle: 'Broad reasoning + context',
+        color: '#b533ff', rgb: '181,51,255',
+        desc: 'Combines your uploaded paper context with the model\'s general knowledge for deeper synthesis, background explanations, and strategic research insights.',
+        queries: ['Explain transformer attention in the context of my papers', 'How does this relate to recent NeurIPS trends?', 'What are the open questions in this field?']
+      },
+      writer: {
+        icon: 'W', name: 'Paper Writer', subtitle: 'Style-aware drafting',
+        color: '#00ff9f', rgb: '0,255,159',
+        desc: 'Draft polished sections — abstracts, lit reviews, methodology — while maintaining your unique academic voice via learned style profiles.',
+        queries: ['Draft an abstract from my uploaded papers', 'Write a related work section', 'Rewrite this paragraph in a formal academic tone']
+      },
+      reviewer_tab: {
+        icon: 'R', name: 'Reviewer', subtitle: 'Adversarial debate engine',
+        color: '#ff8800', rgb: '255,136,0',
+        desc: 'Runs a Skeptic vs Advocate debate on any paper. A Judge weighs evidence and delivers a structured verdict with confidence scores.',
+        queries: ['Critique the novelty of this paper', 'Run a full review debate', 'What are the weakest claims in this study?']
+      },
+      comparator: {
+        icon: 'C', name: 'Comparator', subtitle: 'Claim-level comparison',
+        color: '#ff007f', rgb: '255,0,127',
+        desc: 'Side-by-side claim matrices, conflict maps, benchmark verdicts, and decision outputs across 2-3 papers.',
+        queries: ['Compare attention mechanisms across all 3 papers', 'Build a benchmark verdict matrix', "Which paper's methodology is more rigorous?"]
+      }
+    };
+
+    const tabEls = document.querySelectorAll('.mode-tab');
+    const detailEl = document.getElementById('modeDetail');
+
+    function renderMode(key) {
+      const m = MODES[key];
+      tabEls.forEach(t => t.classList.toggle('active', t.dataset.mode === key));
+      detailEl.innerHTML = `
+        <div class="mode-detail-top-line" style="background: linear-gradient(90deg, ${m.color}, transparent);"></div>
+        <div class="mode-detail-header">
+          <div class="mode-detail-icon" style="background: ${m.color}; color: #0b1120; box-shadow: 0 0 20px rgba(${m.rgb}, 0.4); border: none;">${m.icon}</div>
+          <div>
+            <h3>${m.name}</h3>
+            <div class="mode-subtitle" style="color:${m.color};">${m.subtitle}</div>
+          </div>
+        </div>
+        <p>${m.desc}</p>
+        <div class="queries-label">Example Queries</div>
+        ${m.queries.map((q, i) => `<div class="query-item"><span class="query-num">0${i+1}</span>${q}</div>`).join('')}
+      `;
+    }
+
+    tabEls.forEach(btn => btn.addEventListener('click', () => renderMode(btn.dataset.mode)));
+    renderMode('local');
+
+    const prompts = [
+      'Draft a research summary...',
+      'Compare methods across 3 papers...',
+      'Run a peer review debate...',
+      'Summarize key findings...',
+      'Write a literature review...',
+    ];
+    let promptIndex = 0, charIndex = 0, isDeleting = false;
+    const heroInput = document.getElementById('heroInput');
+
+    function typeLoop() {
+      const current = prompts[promptIndex];
+      if (!isDeleting) {
+        heroInput.placeholder = current.substring(0, charIndex + 1);
+        charIndex++;
+        if (charIndex === current.length) { isDeleting = true; setTimeout(typeLoop, 2000); return; }
+        setTimeout(typeLoop, 60);
+      } else {
+        heroInput.placeholder = current.substring(0, charIndex - 1);
+        charIndex--;
+        if (charIndex === 0) { isDeleting = false; promptIndex = (promptIndex + 1) % prompts.length; setTimeout(typeLoop, 400); return; }
+        setTimeout(typeLoop, 30);
+      }
+    }
+    setTimeout(typeLoop, 1500);
+  </script>
+</body>
+</html>

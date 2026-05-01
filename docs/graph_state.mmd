@@ -1,0 +1,38 @@
+flowchart TD
+  START([START]) --> PREP[prepare_mode]
+  PREP --> RETR[retrieve]
+  RETR --> RERANK[rerank]
+  RERANK --> DRAFT[draft_answer]
+  DRAFT --> VALID[validate_answer]
+  VALID --> FINAL[finalize_answer]
+  FINAL --> END([END])
+
+  DRAFT -->|mode=reviewer| R0
+  DRAFT -->|mode=comparator| C0
+
+  subgraph ReviewerBranch[Reviewer Claim Trial Engine]
+    R0[Load reviewer state] --> R1[Normalize or generate attack vectors]
+    R1 --> R2[Debate loop]
+    R2 --> R3{Synthesis condition met?}
+    R3 -->|No| R2
+    R3 -->|Yes| R4[Evidence-only judge]
+    R4 --> R5[Rewrite compiler card]
+    R5 --> R6[Store verdicts and reports]
+    R6 --> R7{More vectors?}
+    R7 -->|Yes| R2
+    R7 -->|No| R8[Build final_report]
+  end
+
+  subgraph ComparatorBranch[Comparator Claim Matrix]
+    C0[Retrieve per selected paper] --> C1[Merge and dedupe chunks]
+    C1 --> C2[Rerank comparator evidence]
+    C2 --> C3{Enough evidence?}
+    C3 -->|No| C4[Structured comparator fallback]
+    C3 -->|Yes| C5[Generate claim-matrix response]
+    C5 --> C6[Section-locked comparator output]
+    C4 --> C7
+    C6 --> C7[Return to shared validate/finalize]
+  end
+
+  R8 --> VALID
+  C7 --> VALID

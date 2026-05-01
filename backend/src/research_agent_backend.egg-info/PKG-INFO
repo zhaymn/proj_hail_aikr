@@ -1,0 +1,99 @@
+Metadata-Version: 2.4
+Name: research-agent-backend
+Version: 0.1.0
+Summary: Research agent backend powered by FastAPI, LangGraph, and LangChain.
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: fastapi<1.0,>=0.115
+Requires-Dist: uvicorn[standard]<1.0,>=0.30
+Requires-Dist: pydantic-settings<3.0,>=2.4
+Requires-Dist: google-genai<2.0,>=1.0
+Requires-Dist: langgraph<1.0,>=0.2
+Requires-Dist: langchain<1.0,>=0.3
+Requires-Dist: langchain-community<1.0,>=0.3
+Requires-Dist: langchain-text-splitters<1.0,>=0.3
+Requires-Dist: langsmith<1.0,>=0.1
+Requires-Dist: pinecone<7.0,>=6.0
+Requires-Dist: pypdf<6.0,>=5.0
+Requires-Dist: python-multipart<1.0,>=0.0.9
+Requires-Dist: orjson<4.0,>=3.10
+Provides-Extra: dev
+Requires-Dist: httpx<1.0,>=0.27; extra == "dev"
+Requires-Dist: pytest<9.0,>=8.3; extra == "dev"
+
+# Research Agent Backend
+
+Backend for the Research Agent app.
+
+## Current Capabilities
+
+- FastAPI API for health, paper management, chat, style profile, and retrieval preview
+- LangGraph runtime pipeline: `prepare_mode -> retrieve -> rerank -> draft_answer -> validate_answer -> finalize_answer`
+- Hybrid retrieval with reranking
+- Reviewer Claim Trial Engine with persisted per-session debate state
+- Comparator claim-matrix generation with structured section output
+- Runtime-safe structured fallbacks when model providers fail
+
+## Modes
+
+- `Local`: strict grounded paper QA
+- `Global`: open response style with optional paper grounding
+- `Writer`: style-aware drafting
+- `Reviewer`: Skeptic/Advocate/Judge/Rewrite workflow
+- `Comparator`: multi-paper claim and benchmark comparison
+
+## Provider Split
+
+- Pinecone: dense vector store
+- Embeddings: local hash (default) or Gemini
+- Generation: Groq / Gemini / OpenRouter via router + fallback order
+
+## Environment
+
+Copy `backend/.env.example` to `backend/.env` and set relevant keys:
+
+- `PINECONE_API_KEY`
+- `GROQ_API_KEY`
+- `GEMINI_API_KEY`
+- `OPENROUTER_API_KEY`
+- `GENERATION_PROVIDER` (`auto` | `groq` | `gemini` | `openrouter`)
+- `GENERATION_FALLBACK_ORDER` (default `gemini,openrouter,groq`)
+- `GENERATION_PROVIDER_COOLDOWN_SECONDS` (default `600`)
+- `OPENROUTER_MODEL` (default `openai/gpt-4o-mini`)
+- `EMBEDDING_PROVIDER` (`local` | `auto` | `gemini`; default `local`)
+
+Optional tracing:
+
+- `LANGSMITH_TRACING=true`
+- `LANGSMITH_API_KEY=...`
+- `LANGSMITH_PROJECT=research-agent`
+- `LANGSMITH_ENDPOINT=https://api.smith.langchain.com`
+
+## Run
+
+From `backend/`:
+
+```powershell
+uvicorn research_agent.api:app --reload --app-dir src
+```
+
+From workspace root:
+
+```powershell
+$env:PYTHONPATH='backend\src'
+.\.venv\Scripts\python.exe -m uvicorn research_agent.api:app --port 8010
+```
+
+## Stress Script
+
+```powershell
+python .\backend\stress_test_outputs.py
+```
+
+This script emits JSON with reviewer/local/global/comparator stress metrics.
+
+## Docs
+
+- [`../README.md`](../README.md)
+- [`../docs/architecture_walkthrough.md`](../docs/architecture_walkthrough.md)
+- [`../docs/graph_state.md`](../docs/graph_state.md)

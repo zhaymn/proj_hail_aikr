@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Research Agent — Dashboard</title>
+    <meta name="description" content="Upload PDFs. Ask grounded questions. Compare claims. Draft in your voice. Full citation traceability." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+    <!-- ═══ Tailwind ═══ -->
+    <script>
+      tailwind = window.tailwind || {};
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: { sans: ['"Inter"', '-apple-system', 'system-ui', 'sans-serif'] },
+          },
+        },
+      };
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- ═══ KaTeX ═══ -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous" />
+    <style>
+      /* ═══════════════════════════════════════════════
+         DESIGN TOKENS — exact copy from landing.html
+         ═══════════════════════════════════════════════ */
+      :root {
+        --bg: #050709;
+        --surface: #0d1117;
+        --surface-2: #161b22;
+        --surface-3: #1c2333;
+        --border: rgba(255,255,255,0.06);
+        --border-2: rgba(255,255,255,0.1);
+        --text: #f0f2f5;
+        --text-muted: #8b949e;
+        --text-dim: #6e7681;
+        --green: #00ff9f;
+        --green-dim: rgba(0,255,159,0.15);
+        --green-glow: rgba(0,255,159,0.3);
+      }
+      html, body, #root { height: 100%; margin: 0; }
+      body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); color: var(--text); overflow: hidden; -webkit-font-smoothing: antialiased; }
+      * { box-sizing: border-box; }
+
+      /* Scrollbar — green tinted */
+      ::-webkit-scrollbar { width: 5px; height: 5px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb { background: rgba(0,255,159,0.12); border-radius: 99px; }
+      ::-webkit-scrollbar-thumb:hover { background: rgba(0,255,159,0.25); }
+
+      /* ═══ Animations — reused from landing ═══ */
+      @keyframes pulse-dot { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+      @keyframes fadeInUp { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
+      @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+      @keyframes slideUp { from { opacity:0; transform:translateY(24px); } to { opacity:1; transform:translateY(0); } }
+      @keyframes gradientShift { 0% { background-position:0% 50%; } 50% { background-position:100% 50%; } 100% { background-position:0% 50%; } }
+      @keyframes shimmer { 0%,100% { opacity:0.5; } 50% { opacity:1; } }
+      @keyframes breathe { 0%,100% { transform:scale(1);opacity:0.5; } 50% { transform:scale(1.2);opacity:1; } }
+
+      .anim-fade-up { animation: fadeInUp 0.4s cubic-bezier(0.16,1,0.3,1) both; }
+      .anim-fade { animation: fadeIn 0.3s ease both; }
+      .anim-slide-up { animation: slideUp 0.35s cubic-bezier(0.16,1,0.3,1) both; }
+      .anim-breathe { animation: breathe 3s ease-in-out infinite; }
+      .line-clamp-2 { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" crossorigin="anonymous"></script>
+    <script type="text/babel" src="./research_agent.jsx?v=20260419-delete-1"></script>
+  </body>
+</html>
