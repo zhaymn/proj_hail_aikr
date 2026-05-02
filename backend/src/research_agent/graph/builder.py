@@ -1046,7 +1046,7 @@ def _profile_benchmark_labels(profile: dict[str, Any]) -> list[str]:
 
 def _profile_method_signature(profile: dict[str, Any]) -> str:
     text = str(profile.get("method_sentence", "")).strip() or str(profile.get("summary_sentence", "")).strip()
-    return _compact_turn_text(text, max_chars=140) if text else "distinct method emphasis not recovered"
+    return _compact_turn_text(text, max_chars=220) if text else "distinct method emphasis not recovered"
 
 
 def _infer_paper_title(*, full_text: str, filename: str) -> str:
@@ -2164,9 +2164,9 @@ def _comparator_structured_fallback(*, documents: list[Document]) -> str:
         )
         claim_blocks.append(
             f"### {filename}\n"
-            f"- Core contribution: {contribution_text} [{contribution_citation}]\n"
-            f"- Method anchor: {method_text} [{method_citation}]\n"
-            f"- Benchmark anchor: {benchmark_text} [{benchmark_citation}]"
+            f"- Core contribution: {_compact_turn_text(contribution_text, max_chars=800)} [{contribution_citation}]\n"
+            f"- Method anchor: {_compact_turn_text(method_text, max_chars=800)} [{method_citation}]\n"
+            f"- Benchmark anchor: {_compact_turn_text(benchmark_text, max_chars=800)} [{benchmark_citation}]"
         )
         position = str(field_context.get("field_position", "")).strip()
         novelty_band = str(field_context.get("novelty_band", "")).strip()
@@ -2209,7 +2209,7 @@ def _comparator_structured_fallback(*, documents: list[Document]) -> str:
         metric_trail = _metric_trail(filename)
         method_blocks.append(
             f"### {filename}\n"
-            f"- Architecture signal: {method_text} [{method_citation}]\n"
+            f"- Architecture signal: {_compact_turn_text(method_text, max_chars=220)} [{method_citation}]\n"
             + (
                 f"- Training / efficiency signal: {efficiency_text} [{efficiency_citation}]\n"
                 if efficiency_text
@@ -2223,7 +2223,7 @@ def _comparator_structured_fallback(*, documents: list[Document]) -> str:
         )
 
         novelty, rigor, reproducibility, justification = _score_row(filename)
-        metric_text = _compact_turn_text(benchmark_text, max_chars=140)
+        metric_text = _compact_turn_text(benchmark_text, max_chars=200)
         benchmark_rows.append(
             f"| {filename} | {novelty} | {rigor} | {reproducibility} | {metric_text} [{benchmark_citation}] | {justification} |"
         )
@@ -4424,26 +4424,32 @@ def _comparator_output_vision() -> str:
 
 def _reviewer_output_vision() -> str:
     return (
-        "Target style:\n"
-        "- Sound like a sharp but fair senior reviewer.\n"
-        "- Separate what the paper proves from what the paper merely suggests.\n"
-        "- Separate paper-grounded novelty from field-relative novelty and historical importance.\n"
-        "- Use claim-specific strengths and revisions; avoid template reuse.\n"
-        "- Anchor each verdict in one concrete quote or benchmark fact.\n"
-        "- Panel-summary sections should read like short analyst paragraphs, not one-line placeholders.\n"
-        "- For major sections, prefer 4-5 lines of grounded synthesis over one-sentence verdicts.\n"
-        "Mini mock shape:\n"
-        "## Reviewer Complete Report\n"
-        "Final Decision: Borderline / Weak Accept / Weak Reject with one-sentence reason.\n"
-        "### Field Context\n"
-        "- Historical position: foundational / landmark / important / unclear.\n"
-        "- Novelty-at-publication: separate from whether the local snippet evidence is well scoped.\n"
-        "### Strengths Worth Keeping\n"
-        "- Claim-specific strength tied to an exact method or metric anchor.\n"
-        "### High-Impact Concerns\n"
-        "- Concrete overclaim or evidence gap, not a generic complaint.\n"
-        "### Required Revisions\n"
-        "- One surgical edit per claim: what sentence to tighten, what comparator/metric to add.\n"
+        "Target style: senior NeurIPS/ICLR reviewer — precise, evidence-driven, sharply comparative, non-generic.\n"
+        "CRITICAL RULES:\n"
+        "- EVERY statement must map to something specific in the paper or agent outputs.\n"
+        "- DO NOT generate generic academic phrases.\n"
+        "- Prefer depth over breadth (fewer, richer points).\n\n"
+        "AGREEMENTS (High-Signal Overlap Only):\n"
+        "- Only include points where BOTH Advocate and Skeptic converge on a SPECIFIC claim/method/result.\n"
+        "- Each agreement must reference a specific paper element, explain WHY both sides agree, and state the technical implication.\n"
+        "- Format each as: '[Specific shared observation] — Advocate reasoning: <X>; Skeptic reasoning: <Y>; Why this matters: <Z>'\n"
+        "- Reject low-information agreements. If fewer than 2 strong points exist, that is acceptable.\n\n"
+        "DISAGREEMENTS (CORE SECTION — MUST BE DETAILED):\n"
+        "- For EACH contested claim, show:\n"
+        "  Advocate Position: what they believe WITH evidence from the paper\n"
+        "  Skeptic Position: what they challenge WITH precise reasoning\n"
+        "  Point of Divergence: exactly where reasoning splits\n"
+        "  What Would Resolve It: concrete requirement (experiment, ablation, proof, comparison)\n"
+        "- NO vague disagreement summaries. MUST show BOTH sides explicitly.\n\n"
+        "PRESSURE POINTS:\n"
+        "- Where the paper is MOST vulnerable in real peer review: novelty clarity, empirical validation, comparison fairness, theoretical justification.\n"
+        "- Each point must be concrete and tied to specific claims.\n\n"
+        "FINAL VERDICT SIGNAL:\n"
+        "- Summarize whether weaknesses are fixable with revision OR fundamentally limiting.\n\n"
+        "ANTI-PATTERNS (STRICTLY AVOID):\n"
+        "- 'Both sides agree clarity is important'\n"
+        "- 'The method is promising but needs more validation'\n"
+        "- Any statement that could apply to ANY paper\n"
     )
 
 
@@ -5645,18 +5651,28 @@ def _generate_attack_vectors(*, message: str, documents: list[Document], count: 
                 f"{_format_context(documents, max_docs=max(settings.rerank_top_n, 8))}"
             ),
             temperature=0.1,
-            max_output_tokens=420,
+            max_output_tokens=1024,
         )
-    except Exception:
+    except Exception as e:
+        print(f"DEBUG: Exception in _generate_attack_vectors: {e}")
         return _fallback_attack_vectors(message=message, documents=documents)
+    
     payload = _try_parse_json_payload(raw)
+    if payload is None:
+        print(f"DEBUG: Failed to parse JSON in _generate_attack_vectors. Raw LLM output:\n{raw}")
+        return _fallback_attack_vectors(message=message, documents=documents)
+        
     if isinstance(payload, list):
         vectors = [item for item in payload if isinstance(item, dict)]
         return vectors
     if isinstance(payload, dict):
-        maybe_list = payload.get("attack_vectors")
-        if isinstance(maybe_list, list):
-            return [item for item in maybe_list if isinstance(item, dict)]
+        # Handle cases where LLM wraps array in a dict with different keys
+        for key in ["attack_vectors", "vectors", "claims"]:
+            maybe_list = payload.get(key)
+            if isinstance(maybe_list, list):
+                return [item for item in maybe_list if isinstance(item, dict)]
+                
+    print(f"DEBUG: Payload was not a list or recognized dict in _generate_attack_vectors. Payload:\n{payload}")
     return _fallback_attack_vectors(message=message, documents=documents)
 
 
@@ -6486,7 +6502,16 @@ def _compact_turn_text(text: str, *, max_chars: int) -> str:
     cleaned = re.sub(r"\s+", " ", cleaned)
     if len(cleaned) <= max_chars:
         return cleaned
-    return f"{cleaned[: max_chars - 3].rstrip()}..."
+    # Try to break at the last sentence boundary (period followed by space) within the limit
+    candidate = cleaned[:max_chars]
+    last_period = candidate.rfind(". ")
+    if last_period > max_chars * 0.4:
+        return candidate[:last_period + 1]
+    # Fall back to breaking at last space to avoid mid-word cuts
+    last_space = candidate.rfind(" ")
+    if last_space > max_chars * 0.5:
+        return f"{candidate[:last_space]}…"
+    return f"{candidate.rstrip()}…"
 
 
 def _select_turn_documents(
@@ -7280,11 +7305,6 @@ def _render_reviewer_complete_report(
 ) -> str:
     overview = str(final_report.get("overview", "")).strip() or "Panel review completed."
     final_decision = str(final_report.get("final_decision", "")).strip() or "No final decision available."
-    confidence = final_report.get("confidence", 0.0)
-    try:
-        confidence_text = f"{float(confidence):.2f}"
-    except Exception:
-        confidence_text = "0.00"
     agreements = _dedupe_reviewer_lines(
         [str(item).strip() for item in final_report.get("agreements", []) if str(item).strip()],
         cap=4,
@@ -7293,23 +7313,48 @@ def _render_reviewer_complete_report(
         [str(item).strip() for item in final_report.get("disagreements", []) if str(item).strip()],
         cap=5,
     )
+    pressure_points = [str(item).strip() for item in final_report.get("pressure_points", []) if str(item).strip()]
     context_snapshot = [str(item).strip() for item in final_report.get("context_snapshot", []) if str(item).strip()]
     field_context = [str(item).strip() for item in final_report.get("field_context", []) if str(item).strip()]
     suggestions = [str(item).strip() for item in final_report.get("final_suggestions", []) if str(item).strip()]
+    verdict_signal = str(final_report.get("verdict_signal", "")).strip()
 
     lines: list[str] = [
         "## Reviewer Complete Report",
         overview,
         "",
         f"Final Decision: {final_decision}",
-        f"Panel Confidence: {confidence_text}",
     ]
+
+    # --- Section 1: Agreements ---
     if agreements:
-        lines.extend(["", "### Strengths Worth Keeping"])
-        lines.extend(f"- {item}" for item in agreements[:4])
+        lines.extend(["", "### Agreements (High-Signal Overlap)"])
+        for item in agreements[:4]:
+            lines.append(f"• {item}")
+    else:
+        lines.extend(["", "### Agreements (High-Signal Overlap)", "No high-confidence agreements detected from the debate."])
+
+    # --- Section 2: Disagreements ---
     if disagreements:
-        lines.extend(["", "### High-Impact Concerns"])
-        lines.extend(f"- {item}" for item in disagreements[:5])
+        lines.extend(["", "### Disagreements (Core Contested Claims)"])
+        for item in disagreements[:5]:
+            # Split pipe-delimited structured disagreements into multi-line format
+            if " | " in item:
+                parts = item.split(" | ")
+                for part in parts:
+                    lines.append(f"  - {part.strip()}")
+                lines.append("")
+            else:
+                lines.append(f"• {item}")
+    else:
+        lines.extend(["", "### Disagreements (Core Contested Claims)", "No explicit disagreements recorded."])
+
+    # --- Section 3: Review Pressure Points ---
+    if pressure_points:
+        lines.extend(["", "### Review Pressure Points"])
+        lines.extend(f"• {item}" for item in pressure_points[:5])
+
+    # --- Context sections ---
     if context_snapshot:
         lines.extend(["", "### Paper Snapshot"])
         lines.extend(f"- {item}" for item in context_snapshot[:5])
@@ -7320,6 +7365,7 @@ def _render_reviewer_complete_report(
         lines.extend(["", "### Required Revisions"])
         lines.extend(f"- {item}" for item in suggestions[:6])
 
+    # --- Per-vector claim reviews ---
     used_quotes: set[str] = set()
     for idx, vector in enumerate(attack_vectors, start=1):
         vector_id = str(vector.get("id", "V?"))
@@ -7372,6 +7418,10 @@ def _render_reviewer_complete_report(
         )
         if idx >= 4:
             break
+
+    # --- Section 4: Final Verdict Signal ---
+    if verdict_signal:
+        lines.extend(["", "### Final Verdict Signal", verdict_signal])
 
     return "\n".join(lines).strip()
 
@@ -7481,10 +7531,18 @@ def _build_current_vector_report(
             system_prompt=(
                 "You are a debate analyst for a paper reviewer panel.\n"
                 "Return JSON only with keys:\n"
-                "agreements (array), disagreements (array), common_points (array),\n"
+                "agreements (array of strings), disagreements (array of strings), common_points (array),\n"
                 "skeptic_conclusion (string), advocate_conclusion (string),\n"
-                "joint_conclusion (string), author_action_plan (array).\n"
-                "Keep output concrete and grounded in the two arguments."
+                "joint_conclusion (string), author_action_plan (array).\n\n"
+                "CRITICAL RULES:\n"
+                "- agreements must reference SPECIFIC methods, results, or claims from the paper\n"
+                "- Each agreement must state what the advocate argues AND what the skeptic concedes\n"
+                "- Format: 'Both sides agree [specific observation]. Advocate says: [X]. Skeptic concedes: [Y].'\n"
+                "- disagreements must explicitly contrast advocate vs skeptic positions\n"
+                "- Format: 'Advocate believes [X with evidence]. Skeptic argues [Y with reasoning].'\n"
+                "- NEVER output generic phrases like 'promising but needs work' or 'clarity could improve'\n"
+                "- If a statement could apply to ANY random ML paper, do NOT include it\n"
+                "- joint_conclusion must name the specific claim and state the paper-specific resolution"
             ),
             user_prompt=(
                 f"Vector: {vector_id} | Claim: {claim}\n\n"
@@ -7496,7 +7554,7 @@ def _build_current_vector_report(
                 f"{_format_context(documents, max_docs=3)}"
             ),
             temperature=0.1,
-            max_output_tokens=360,
+            max_output_tokens=1024,
         )
         payload = _try_parse_json_payload(response)
         if isinstance(payload, dict):
@@ -7534,26 +7592,26 @@ def _fallback_current_vector_report(
     advocate_position: str,
 ) -> dict[str, Any]:
     claim = str(active_vector.get("claim", "")).strip() or "the active claim"
+    category = str(active_vector.get("category", "method")).strip().lower() or "method"
+    # Extract key phrases from actual debate positions for claim-specific fallback
+    skeptic_short = _compact_turn_text(skeptic_position, max_chars=120)
+    advocate_short = _compact_turn_text(advocate_position, max_chars=120)
     return {
-        "agreements": [
-            "Both reviewers agree the claim should be bounded to directly measured evidence.",
-            "Both sides agree clearer wording improves credibility.",
-        ],
+        "agreements": [],
         "disagreements": [
-            "Skeptic argues current evidence is insufficient for the full claim strength.",
-            "Advocate argues the claim is defendable once scope is explicit.",
+            f"Advocate believes: {advocate_short}",
+            f"Skeptic argues: {skeptic_short}",
         ],
         "common_points": [
-            "Evidence exists for feasibility.",
-            "Claim wording should match measured scope.",
+            f"The claim '{_compact_turn_text(claim, max_chars=60)}' targets a meaningful {category} question.",
         ],
-        "skeptic_conclusion": f"The paper overstates {claim.lower()} without enough direct support.",
-        "advocate_conclusion": f"The paper can keep {claim.lower()} if scope is narrowed to measured settings.",
-        "joint_conclusion": "Promising contribution, but strongest claims need tighter evidence-aligned framing.",
+        "skeptic_conclusion": f"The paper overstates '{_compact_turn_text(claim, max_chars=80)}' — {skeptic_short}",
+        "advocate_conclusion": f"The paper can defend '{_compact_turn_text(claim, max_chars=80)}' — {advocate_short}",
+        "joint_conclusion": f"On '{_compact_turn_text(claim, max_chars=60)}': the {category} contribution is directionally sound, but the claim-evidence gap identified by the skeptic needs closing before this specific point is reviewer-proof.",
         "author_action_plan": [
-            "Rewrite claim language to match reported setup and measurements.",
-            "Add one explicit metric/baseline comparator in the same paragraph as the claim.",
-            "State one explicit limitation boundary adjacent to the claim.",
+            f"Rewrite the claim about '{_compact_turn_text(claim, max_chars=60)}' to match the exact reported scope.",
+            f"Add one explicit comparator or ablation that directly addresses the skeptic concern.",
+            f"State one limitation boundary that acknowledges the gap between the claim and measured evidence.",
         ],
     }
 
@@ -7663,49 +7721,116 @@ def _build_reviewer_final_report(
     try:
         response = text_service.generate(
             system_prompt=(
-                "You are generating a final panel report for a two-reviewer paper debate.\n"
-                "Return JSON only with keys:\n"
+                "You are the FINAL REVIEW SYNTHESIS AGENT. You do NOT analyze the paper directly.\n"
+                "You ONLY operate on structured inputs from previous phases.\n\n"
+                "INPUTS:\n"
+                "- claim_reports (from Phase 3: per-claim vector intelligence)\n"
+                "  Each contains: agreements, disagreements, advocate_conclusion, skeptic_conclusion\n"
+                "- judge_verdicts (from Phase 2)\n"
+                "  Each claim has: verdict (advocate_prevailed|skeptic_prevailed|contested), rationale\n\n"
+                "CORE ROLE: You are a SYNTHESIZER, not a generator.\n"
+                "You MUST: aggregate claim-level intelligence, preserve Advocate vs Skeptic contrast, respect Judge decisions.\n"
+                "You MUST NOT: invent new arguments, use generic academic phrases, ignore claim-level data.\n\n"
+                "Return JSON with keys:\n"
                 "overview (string), agreements (array of strings), disagreements (array of strings),\n"
-                "common_points (array of strings), skeptic_conclusion (string), advocate_conclusion (string),\n"
-                "joint_conclusion (string), field_context (array of strings), final_suggestions (array of strings), final_decision (string), confidence (number 0..1).\n"
-                "Requirements:\n"
-                "- concise, evidence-grounded, no generic filler\n"
-                "- avoid repeating near-identical suggestions across claims\n"
-                "- every suggestion must be claim-specific and actionable\n"
-                "- common_points must be substantive reviewer takeaways, not placeholders\n"
-                "- field_context must separate paper-grounded novelty from field-relative novelty and historical importance\n"
-                "- skeptic_conclusion, advocate_conclusion, and joint_conclusion should each be 2-3 sentences, specific to this paper and panel outcome\n"
-                "- do not output lines like 'the provided evidence supports the claim' or 'no major unresolved disagreements were recorded' unless there is no stronger paper-specific wording available\n\n"
-                "Quality target:\n"
-                f"{_reviewer_output_vision()}"
+                "pressure_points (array of strings), common_points (array of strings),\n"
+                "skeptic_conclusion (string), advocate_conclusion (string), joint_conclusion (string),\n"
+                "field_context (array of strings), final_suggestions (array of strings),\n"
+                "final_decision (string), confidence (number 0..1), verdict_signal (string).\n\n"
+                "SECTION 1 — AGREEMENTS (DERIVED, NOT GENERATED):\n"
+                "Source: ONLY from claim_reports[].agreements\n"
+                "Process: collect all agreement signals → remove weak/generic → merge overlapping → rewrite into HIGH-DENSITY statements\n"
+                "Each agreement must preserve meaning from Phase 3 and NOT generalize into vague statements.\n"
+                "If long, compress 8-10 lines into 3-4 dense lines via MERGE + REWRITE (not deletion).\n"
+                "If no strong agreement signals: output 'No strong non-trivial agreements.'\n\n"
+                "SECTION 2 — DISAGREEMENTS (JUDGE-GUIDED AGGREGATION):\n"
+                "Source: claim_reports[] + judge_verdicts[]\n"
+                "Include ALL claims where verdict = contested OR skeptic_prevailed.\n"
+                "For each: 'Claim: <label> | Advocate believes: <advocate_conclusion> | Skeptic argues: <skeptic_conclusion> | Core disagreement: <from disagreements> | Judge signal: <verdict + brief rationale>'\n"
+                "Do NOT rewrite meaning. Do NOT drop either side.\n\n"
+                "ANTI-BOILERPLATE: Reject any sentence that could apply to another paper or is not traceable to claim_reports.\n"
+                "Forbidden: 'promising contribution', 'needs better evaluation', 'clarity could improve'\n\n"
+                "ADAPTIVE COMPRESSION: If output is too long, compress agreements first (merge aggressively),\n"
+                "slightly shorten disagreement explanations, but KEEP all claims. NEVER cut mid-sentence.\n\n"
+                "FAILSAFE: If too long, fall back to: agreements=top 2 merged, disagreements='Advocate: <X> | Skeptic: <Y> | Issue: <Z>' per claim.\n"
             ),
             user_prompt=(
-                "Attack vectors with verdicts:\n"
+                "=== JUDGE VERDICTS (Phase 2) ===\n"
                 f"{json.dumps(vector_verdicts)}\n\n"
-                "Judge rationales:\n"
+                "=== JUDGE RATIONALES ===\n"
                 f"{json.dumps({k: v.get('rationale', '') for k, v in vector_judgments.items()})}\n\n"
-                "Per-vector intelligence reports:\n"
+                "=== CLAIM REPORTS (Phase 3 — per-vector intelligence) ===\n"
                 f"{json.dumps(vector_reports)}\n\n"
-                "Rewrite cards:\n"
+                "=== REWRITE CARDS ===\n"
                 f"{json.dumps(syntheses)}\n\n"
-                "Debate transcript excerpt:\n"
+                "=== DEBATE TRANSCRIPT ===\n"
                 f"{_format_panel_history_compact(debate_history=debate_history, max_turns=14)}\n\n"
-                "Global context snapshot (must inform the final report):\n"
+                "=== GLOBAL CONTEXT ===\n"
                 f"{json.dumps(context_snapshot)}\n\n"
-                "Field-aware context scaffold (refine if the model knows more, but stay honest):\n"
+                "=== FIELD CONTEXT ===\n"
                 f"{json.dumps(field_context)}\n\n"
-                "Retrieved context:\n"
+                "=== RETRIEVED EVIDENCE ===\n"
                 f"{_format_context(documents, max_docs=max(settings.rerank_top_n, 10))}"
             ),
             temperature=0.1,
-            max_output_tokens=760,
+            max_output_tokens=2048,
         )
         payload = _try_parse_json_payload(response)
         if isinstance(payload, dict):
+            # Parse structured agreements (array of objects or strings)
+            raw_agreements = payload.get("agreements", [])
+            parsed_agreements: list[str] = []
+            for item in raw_agreements:
+                if isinstance(item, dict):
+                    obs = str(item.get("observation", "")).strip()
+                    adv = str(item.get("advocate_reasoning", "")).strip()
+                    skp = str(item.get("skeptic_reasoning", "")).strip()
+                    why = str(item.get("why_it_matters", "")).strip()
+                    if obs:
+                        parts = [obs]
+                        if adv:
+                            parts.append(f"Advocate reasoning: {adv}")
+                        if skp:
+                            parts.append(f"Skeptic reasoning: {skp}")
+                        if why:
+                            parts.append(f"Why this matters: {why}")
+                        parsed_agreements.append(" — ".join(parts))
+                elif isinstance(item, str) and item.strip():
+                    parsed_agreements.append(item.strip())
+
+            # Parse structured disagreements (array of objects or strings)
+            raw_disagreements = payload.get("disagreements", [])
+            parsed_disagreements: list[str] = []
+            for item in raw_disagreements:
+                if isinstance(item, dict):
+                    claim = str(item.get("claim", "")).strip()
+                    adv_pos = str(item.get("advocate_position", "")).strip()
+                    skp_pos = str(item.get("skeptic_position", "")).strip()
+                    diverge = str(item.get("point_of_divergence", "")).strip()
+                    resolve = str(item.get("what_would_resolve_it", "")).strip()
+                    if claim:
+                        parts = [f"Claim: {claim}"]
+                        if adv_pos:
+                            parts.append(f"Advocate Position: {adv_pos}")
+                        if skp_pos:
+                            parts.append(f"Skeptic Position: {skp_pos}")
+                        if diverge:
+                            parts.append(f"Point of Divergence: {diverge}")
+                        if resolve:
+                            parts.append(f"What Would Resolve It: {resolve}")
+                        parsed_disagreements.append(" | ".join(parts))
+                elif isinstance(item, str) and item.strip():
+                    parsed_disagreements.append(item.strip())
+
+            # Parse pressure_points
+            raw_pressure = payload.get("pressure_points", [])
+            pressure_points = [str(p).strip() for p in raw_pressure if str(p).strip()]
+
             report = {
                 "overview": str(payload.get("overview", "")).strip(),
-                "agreements": [str(item).strip() for item in payload.get("agreements", []) if str(item).strip()],
-                "disagreements": [str(item).strip() for item in payload.get("disagreements", []) if str(item).strip()],
+                "agreements": parsed_agreements,
+                "disagreements": parsed_disagreements,
+                "pressure_points": pressure_points[:5],
                 "common_points": [str(item).strip() for item in payload.get("common_points", []) if str(item).strip()],
                 "skeptic_conclusion": str(payload.get("skeptic_conclusion", "")).strip(),
                 "advocate_conclusion": str(payload.get("advocate_conclusion", "")).strip(),
@@ -7717,6 +7842,7 @@ def _build_reviewer_final_report(
                 "final_decision": str(payload.get("final_decision", "")).strip(),
                 "confidence": float(payload.get("confidence", 0.55)),
                 "context_snapshot": context_snapshot,
+                "verdict_signal": str(payload.get("verdict_signal", "")).strip(),
             }
             report["confidence"] = max(0.0, min(1.0, report["confidence"]))
             if report["overview"] and report["final_decision"]:
@@ -7724,6 +7850,8 @@ def _build_reviewer_final_report(
                     report["agreements"] = fallback["agreements"]
                 if not report["disagreements"]:
                     report["disagreements"] = fallback["disagreements"]
+                if not report.get("pressure_points"):
+                    report["pressure_points"] = fallback.get("pressure_points", [])
                 if not report["common_points"]:
                     report["common_points"] = fallback["common_points"]
                 if not report["skeptic_conclusion"]:
@@ -7736,6 +7864,8 @@ def _build_reviewer_final_report(
                     report["field_context"] = fallback["field_context"]
                 if not report["final_suggestions"]:
                     report["final_suggestions"] = fallback["final_suggestions"]
+                if not report.get("verdict_signal"):
+                    report["verdict_signal"] = fallback.get("verdict_signal", "")
                 quality_issues = _reviewer_report_quality_issues(report=report, attack_vectors=attack_vectors)
                 if quality_issues:
                     fallback["quality_guard"] = quality_issues
@@ -7791,20 +7921,35 @@ def _fallback_reviewer_final_report(
             quote=quote,
             evidence_pack=evidence_pack if isinstance(evidence_pack, list) else [],
         )
+
+        # Build structured disagreement contrasting Skeptic vs Advocate
+        report = vector_reports.get(vector_id, {}) if isinstance(vector_reports, dict) else {}
+        
+        # Make the fallbacks claim-specific dynamically
+        claim_short = _compact_turn_text(claim, max_chars=80)
+        skeptic_c = str(report.get("skeptic_conclusion", "")).strip() or f"The paper overstates the claim that '{claim_short}' — the current evidence is insufficient to fully support it."
+        advocate_c = str(report.get("advocate_conclusion", "")).strip() or f"The claim that '{claim_short}' is directionally correct and defendable if scoped precisely to the measured evidence."
+        
+        # Prefer the raw judge rationale over the generic templated reviewer_read if it exists
+        judge_signal = rationale_raw if rationale_raw else reviewer_read
+        
+        disagreement_text = (
+            f"{claim_label}\n"
+            f"  - Advocate believes: {advocate_c}\n"
+            f"  - Skeptic argues: {skeptic_c}\n"
+            f"  - Judge signal: {judge_signal}"
+        )
+
         if verdict == "advocate_prevailed":
             line = f"{claim_label}: {reviewer_read}"
             if quote:
-                line = f'{line} Anchor quote: "{quote}"'
+                line = f'{line} (Anchor quote: "{quote}")'
             agreements.append(line)
-        elif verdict == "skeptic_prevailed":
-            line = f"{claim_label}: {reviewer_read}"
-            if quote:
-                line = f'{line} Anchor quote: "{quote}"'
-            disagreements.append(line)
         else:
-            line = f"{claim_label}: {reviewer_read}"
+            # Both skeptic_prevailed and contested go to disagreements
+            line = disagreement_text
             if quote:
-                line = f'{line} Anchor quote: "{quote}"'
+                line += f'\n  - Anchor quote: "{quote}"'
             disagreements.append(line)
         patch = _extract_patch_instruction(syntheses.get(vector_id, ""))
         if patch and not _looks_generic_patch_instruction(patch):
@@ -7823,7 +7968,35 @@ def _fallback_reviewer_final_report(
                 suggestions.append(suggestion)
 
     if not agreements:
-        agreements.append("Both sides agreed that clearer scope boundaries improve claim credibility.")
+        # Build structured agreements from vector reports using Advocate/Skeptic contrast
+        if vector_reports and isinstance(vector_reports, dict):
+            for vid, report in vector_reports.items():
+                if not isinstance(report, dict):
+                    continue
+                # Find the matching vector for claim text
+                matched_claim = ""
+                for v in attack_vectors:
+                    if str(v.get("id", "")) == vid:
+                        matched_claim = str(v.get("claim", "")).strip()
+                        break
+                adv_c = str(report.get("advocate_conclusion", "")).strip()
+                skp_c = str(report.get("skeptic_conclusion", "")).strip()
+                # Build structured agreement from shared ground
+                report_agreements = report.get("agreements", [])
+                if isinstance(report_agreements, list):
+                    for agr in report_agreements:
+                        agr_text = str(agr).strip()
+                        if agr_text and agr_text not in agreements:
+                            # Enrich with advocate/skeptic context only if missing to prevent template double-stacking
+                            if adv_c and skp_c and matched_claim and "Advocate says" not in agr_text and "Skeptic concedes" not in agr_text:
+                                agr_text = f"{agr_text} — Advocate says: {_compact_turn_text(adv_c, max_chars=100)}. Skeptic concedes: {_compact_turn_text(skp_c, max_chars=100)}."
+                            agreements.append(agr_text)
+                            if len(agreements) >= 3:
+                                break
+                if len(agreements) >= 3:
+                    break
+        if not agreements:
+            agreements.append("No strong non-trivial agreements identified between Advocate and Skeptic.")
     if not disagreements:
         disagreements = _reviewer_residual_concerns(
             attack_vectors=attack_vectors,
@@ -7861,6 +8034,33 @@ def _fallback_reviewer_final_report(
     else:
         decision = "Borderline: promising contribution, but contested claims need tighter evidence framing."
 
+    # Build pressure points from attack vectors
+    pressure_points: list[str] = []
+    for idx, vector in enumerate(attack_vectors, start=1):
+        category = str(vector.get("category", "")).strip().lower()
+        claim = str(vector.get("claim", "")).strip()
+        vector_id = str(vector.get("id", ""))
+        verdict = str(vector_verdicts.get(vector_id, "contested"))
+        if verdict in {"skeptic_prevailed", "contested"} and claim:
+            if category == "novelty":
+                pressure_points.append(f"Novelty clarity: {_compact_turn_text(claim, max_chars=120)} — novelty delta against closest prior work is not explicitly scoped.")
+            elif category in {"evaluation", "benchmark"}:
+                pressure_points.append(f"Empirical validation: {_compact_turn_text(claim, max_chars=120)} — claim blurs which benchmark slice actually supports it.")
+            elif category in {"method", "assumption"}:
+                pressure_points.append(f"Comparison fairness: {_compact_turn_text(claim, max_chars=120)} — rationale for choosing this over nearby alternatives is incomplete.")
+            else:
+                pressure_points.append(f"Theoretical justification: {_compact_turn_text(claim, max_chars=120)} — evidence boundary for this claim needs tighter framing.")
+        if len(pressure_points) >= 4:
+            break
+
+    # Build verdict signal
+    if skeptic_wins > advocate_wins:
+        verdict_signal = "Weaknesses are significant and may require substantial revision or additional experiments to address. Some concerns (missing baselines, overstated claims) are fixable, but the volume of issues suggests major revision is needed."
+    elif advocate_wins >= max(2, total - 1) and contested <= 1 and skeptic_wins == 0:
+        verdict_signal = "Weaknesses are minor and fixable with targeted revision. The core contribution is solid; the paper primarily needs tighter claim scoping and editorial precision."
+    else:
+        verdict_signal = "Weaknesses are a mix of fixable editorial issues and deeper evidence gaps. The core contribution is promising, but contested claims need concrete additional evidence or tighter scoping to clear the review bar."
+
     report = {
         "overview": (
             f"Panel completed {total} claim trials: skeptic_prevailed={skeptic_wins}, "
@@ -7868,6 +8068,7 @@ def _fallback_reviewer_final_report(
         ),
         "agreements": agreements[:4],
         "disagreements": disagreements[:5],
+        "pressure_points": pressure_points[:5],
         "common_points": common_points[:5],
         "context_snapshot": snapshot[:4] if isinstance(snapshot, list) else [],
         "field_context": field_context[:4] if isinstance(field_context, list) else [],
@@ -7895,6 +8096,7 @@ def _fallback_reviewer_final_report(
         "final_suggestions": suggestions[:6],
         "final_decision": decision,
         "confidence": max(0.35, min(0.9, 0.5 + ((advocate_wins - skeptic_wins) * 0.08))),
+        "verdict_signal": verdict_signal,
     }
     return _humanize_reviewer_report(report=report, attack_vectors=attack_vectors)
 

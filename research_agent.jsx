@@ -12,11 +12,7 @@ const MODES = [
   { id:"comparator", name:"Comparator",   glyph:"C", desc:"Multi-paper comparison engine" },
 ];
 const CHAT_IDS = new Set(["local","global","writer"]);
-const REVIEW_LENSES = [
-  { id:"full", label:"Full Review" },
-  { id:"novelty", label:"Novelty" },
-  { id:"method", label:"Methods" },
-];
+
 const COMPARE_PRESETS = [
   { id:"full",      label:"Full Verdict",  text:"Run a full comparator pass with claim matrix, conflict map, benchmark verdict matrix, and decision by use case." },
   { id:"conflict",  label:"Conflict Map",  text:"Focus on agreements, contradictions, and non-overlap across selected papers, then state what evidence resolves each conflict." },
@@ -30,7 +26,7 @@ function sid() { return crypto?.randomUUID?.() || `s-${Date.now()}`; }
 function clip(t,l) { return t&&t.length>l?t.slice(0,l)+"…":(t||""); }
 function compTextById(id) { return (COMPARE_PRESETS.find(p=>p.id===id)||COMPARE_PRESETS[0]).text; }
 function compLabelById(id) { return (COMPARE_PRESETS.find(p=>p.id===id)||COMPARE_PRESETS[0]).label; }
-function reviewLabel(id) { return (REVIEW_LENSES.find(l=>l.id===id)||REVIEW_LENSES[0]).label; }
+
 function normSnip(t) { return (t||"").replace(/\s+/g," ").trim(); }
 function normCites(c) { const s=new Set,o=[]; for(const x of c||[]){ const k=[x.paper_id||"",x.chunk_id||"",x.filename||""].join("|"); if(s.has(k))continue; s.add(k); o.push({...x,snippet:normSnip(x.snippet||"")}); } return o; }
 function simplifyErr(d) { const t=String(d||"").trim(); if(/rate limit/i.test(t)&&/groq|tokens/i.test(t))return "Groq quota reached."; return t||"Request failed."; }
@@ -79,7 +75,7 @@ function normRE(d){return(Array.isArray(d?.round_events)?d.round_events:[]).map(
 const SK_C={skeptic:"border-l-red-400/60",advocate:"border-l-[var(--green)]/60",judge:"border-l-yellow-400/60",synthesise:"border-l-cyan-400/60"};
 const SK_L={skeptic:"Skeptic",advocate:"Advocate",judge:"Judge",synthesise:"Compiler"};
 function renderDebate(d){const ev=normRE(d);if(!ev.length)return null;return(<div className="rounded-2xl border border-[var(--border-2)] bg-[var(--surface)] p-5"><div className="text-[11px] font-bold uppercase tracking-[.14em] text-[var(--green)] mb-3">Live Debate Round</div><div className="space-y-2">{ev.map((e,i)=><div key={i} className={`rounded-xl border border-[var(--border)] border-l-4 ${SK_C[e.speaker]||"border-l-[var(--green)]/30"} bg-[rgba(255,255,255,0.02)] p-3`}><div className="flex items-center justify-between mb-1"><span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-dim)]">{SK_L[e.speaker]||"Panel"}</span>{e.turn?<span className="text-[9px] text-[var(--text-dim)]">Turn {e.turn}</span>:null}</div><div className="text-xs text-[var(--text-muted)] leading-relaxed whitespace-pre-wrap">{rInline(e.content)}</div></div>)}</div></div>);}
-function renderReport(r){if(!r||typeof r!=="object")return null;const ag=(r.agreements||[]).filter(Boolean),dg=(r.disagreements||[]).filter(Boolean);const conf=Number.isFinite(+r.confidence)?+r.confidence:null;return(<div className="rounded-2xl border border-[rgba(0,255,159,0.2)] bg-[var(--surface)] p-5" style={{boxShadow:"0 8px 40px rgba(0,255,159,0.06)"}}><div className="flex items-center justify-between mb-4"><span className="text-xs font-bold uppercase tracking-[.14em] text-[var(--green)]">Panel Verdict</span>{conf!==null&&<span className="rounded-full bg-[rgba(0,255,159,0.08)] border border-[rgba(0,255,159,0.2)] px-3 py-0.5 text-[11px] font-bold text-[var(--green)]">{(conf*100).toFixed(0)}%</span>}</div><p className="text-sm text-[var(--text)] leading-relaxed mb-4">{r.overview||"Summary ready."}</p><div className="grid gap-3 sm:grid-cols-2 mb-3"><div className="rounded-xl border border-[var(--border)] bg-[rgba(255,255,255,0.02)] p-3"><h4 className="text-[10px] font-bold uppercase text-[var(--green)] opacity-60 mb-2">Agreements</h4><ul className="space-y-1 text-xs text-[var(--text-muted)]">{(ag.length?ag:["No agreements captured."]).map((x,i)=><li key={i}>• {x}</li>)}</ul></div><div className="rounded-xl border border-[var(--border)] bg-[rgba(255,255,255,0.02)] p-3"><h4 className="text-[10px] font-bold uppercase text-red-400/70 mb-2">Disagreements</h4><ul className="space-y-1 text-xs text-[var(--text-muted)]">{(dg.length?dg:["No disagreements captured."]).map((x,i)=><li key={i}>• {x}</li>)}</ul></div></div>{r.final_decision&&<div className="rounded-xl border border-[rgba(0,255,159,0.2)] bg-[rgba(0,255,159,0.04)] p-3"><h4 className="text-[10px] font-bold uppercase text-[var(--green)] mb-2">Final Decision</h4><p className="text-sm text-emerald-100 leading-relaxed">{r.final_decision}</p></div>}</div>);}
+function renderReport(r){if(!r||typeof r!=="object")return null;const ag=(r.agreements||[]).filter(Boolean),dg=(r.disagreements||[]).filter(Boolean);return(<div className="rounded-2xl border border-[rgba(0,255,159,0.2)] bg-[var(--surface)] p-5" style={{boxShadow:"0 8px 40px rgba(0,255,159,0.06)"}}><div className="flex items-center mb-4"><span className="text-xs font-bold uppercase tracking-[.14em] text-[var(--green)]">Panel Verdict</span></div><p className="text-sm text-[var(--text)] leading-relaxed mb-4">{r.overview||"Summary ready."}</p><div className="grid gap-3 sm:grid-cols-2 mb-3"><div className="rounded-xl border border-[var(--border)] bg-[rgba(255,255,255,0.02)] p-3"><h4 className="text-[10px] font-bold uppercase text-[var(--green)] opacity-60 mb-2">Agreements</h4><ul className="space-y-1 text-xs text-[var(--text-muted)]">{(ag.length?ag:["No agreements captured."]).map((x,i)=><li key={i}>• {x}</li>)}</ul></div><div className="rounded-xl border border-[var(--border)] bg-[rgba(255,255,255,0.02)] p-3"><h4 className="text-[10px] font-bold uppercase text-red-400/70 mb-2">Disagreements</h4><ul className="space-y-1 text-xs text-[var(--text-muted)]">{(dg.length?dg:["No disagreements captured."]).map((x,i)=><li key={i}>• {x}</li>)}</ul></div></div>{r.final_decision&&<div className="rounded-xl border border-[rgba(0,255,159,0.2)] bg-[rgba(0,255,159,0.04)] p-3"><h4 className="text-[10px] font-bold uppercase text-[var(--green)] mb-2">Final Decision</h4><p className="text-sm text-emerald-100 leading-relaxed">{r.final_decision}</p></div>}</div>);}
 
 /* ═══ API ═══ */
 async function api(p,o){const r=await fetch(p,o);if(!r.ok){let d=r.statusText;try{d=(await r.json()).detail||d;}catch(_){}throw new Error(simplifyErr(d));}return r.json();}
@@ -551,7 +547,7 @@ function ConversationStream({ history, activeTasks, activeMode, currentMode, cop
    Reviewer/Comparator = action panel (no text input)
    Chat modes = text input styled like landing search
    ════════════════════════════════════════════════════════ */
-function BottomBar({ draft, onChange, onKeyDown, onSend, onAttach, loading, canSend, currentMode, activeMode, onCompare, onReview, canCompare, canReview, selectedPapers, reviewTargetPaper, reviewLens, onReviewLensChange, comparatorPreset, onCompPresetChange, contextCount }) {
+function BottomBar({ draft, onChange, onKeyDown, onSend, onAttach, loading, canSend, currentMode, activeMode, onCompare, onReview, canCompare, canReview, selectedPapers, reviewTargetPaper, comparatorPreset, onCompPresetChange, contextCount }) {
   const taRef = useRef(null);
   useEffect(()=>{if(taRef.current){taRef.current.style.height="auto";taRef.current.style.height=Math.min(taRef.current.scrollHeight,120)+"px";}}, [draft]);
 
@@ -574,19 +570,12 @@ function BottomBar({ draft, onChange, onKeyDown, onSend, onAttach, loading, canS
               </div>
               {reviewTargetPaper && <span className="rounded-full bg-[rgba(0,255,159,0.08)] border border-[rgba(0,255,159,0.2)] px-2 py-0.5 text-[9px] font-bold text-[var(--green)] uppercase">Ready</span>}
             </div>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-[10px] text-[var(--text-dim)] font-medium">Focus:</span>
-              {REVIEW_LENSES.map(l => (
-                <button key={l.id} onClick={()=>onReviewLensChange(l.id)}
-                  className={`rounded-[10px] px-2.5 py-1 text-[11px] font-semibold border transition-all ${reviewLens===l.id ? "bg-[rgba(0,255,159,0.1)] text-[var(--green)] border-[rgba(0,255,159,0.2)]" : "text-[var(--text-dim)] border-[var(--border)] hover:border-[var(--border-2)] hover:text-[var(--text-muted)]"}`}
-                  style={{transition:"all 0.25s cubic-bezier(0.16,1,0.3,1)"}}>{l.label}</button>
-              ))}
-            </div>
+
             {/* CTA — matches landing .btn-primary exactly */}
             <button onClick={onReview} disabled={!canReview||loading}
               className="w-full flex items-center justify-center gap-2 rounded-[12px] py-2.5 text-sm font-bold text-[#021a0f] disabled:opacity-20 disabled:cursor-not-allowed transition-all"
               style={{background:"linear-gradient(135deg, var(--green), #34d399)", boxShadow: canReview&&!loading ? "0 8px 32px rgba(0,255,159,0.2)" : "none", transition:"all 0.25s cubic-bezier(0.16,1,0.3,1)"}}>
-              {loading ? <><span className="h-4 w-4 rounded-full border-2 border-[#021a0f]/30 border-t-[#021a0f] animate-spin"/> Analyzing…</> : <><Icon name="play" className="w-4 h-4"/> Run Review</>}
+              {loading ? <><span className="h-4 w-4 rounded-full border-2 border-[#021a0f]/30 border-t-[#021a0f] animate-spin"/> Analyzing…</> : <><Icon name="play" className="w-4 h-4"/> Run Full Review</>}
             </button>
           </div>
         </div>
@@ -679,7 +668,7 @@ function ResearchAgent() {
   const [papers, setPapers] = useState([]);
   /* Per-mode paper selection — persists across mode switches */
   const [modeSelections, setModeSelections] = useState({ local:[], global:[], writer:[], reviewer:[], comparator:[] });
-  const [reviewLens, setReviewLens] = useState("full");
+
   const [compPreset, setCompPreset] = useState("full");
   const [history, setHistory] = useState([]);
   const [health, setHealth] = useState({ llm_available:false, graph_ready:false, indexed_papers:0 });
@@ -702,9 +691,14 @@ function ResearchAgent() {
   
   const allPapers = useMemo(() => {
     const list = [...papers];
+    // Only show temp entries if no real paper with the same filename exists yet
+    const realFilenames = new Set(papers.map(p => p.filename));
     Object.keys(fileStates).forEach(id => {
       if (id.startsWith("temp-") && !list.some(x=>x.paper_id===id)) {
-        list.unshift({ paper_id: id, filename: fileStates[id].filename, chunk_count: 0 });
+        const tempFilename = fileStates[id].filename;
+        if (!realFilenames.has(tempFilename)) {
+          list.unshift({ paper_id: id, filename: tempFilename, chunk_count: 0 });
+        }
       }
     });
     return list;
@@ -789,9 +783,8 @@ function ResearchAgent() {
       clearInterval(idx);
       // Stage 3: Indexed — snap to 100%
       tempIds.forEach(id=>setFileStates(s=>({...s,[id]:{...(s[id]||{}),status:FILE_ST.INDEXED,progress:100}})));
+      tempIds.forEach(id=>setFileStates(s=>{const n={...s};delete n[id];return n;}));
       await bootstrap();
-      // Clean temp states after showing "Indexed" briefly
-      setTimeout(()=>{tempIds.forEach(id=>setFileStates(s=>{const n={...s};delete n[id];return n;}));},2000);
     } catch(err) { clearInterval(prog); setError(err.message||"Upload failed."); tempIds.forEach(id=>setFileStates(s=>{const n={...s};delete n[id];return n;})); }
     setDragging(false);
     if(fileRef.current) fileRef.current.value="";
@@ -821,16 +814,17 @@ function ResearchAgent() {
   async function runReview() {
     if(!canReview||loading)return;
     const taskId = `task-${Date.now()}`;
-    const pid=selectedIds[0], lens=reviewLabel(reviewLens);
+    const pid=selectedIds[0];
     setError("");
     setActiveTasks(t=>({...t,[taskId]:{mode:"reviewer",status:"thinking"}}));
-    setHistory(h=>[...h,{id:`${Date.now()}-u`,role:"user",mode:"reviewer",content:`Review: ${lens}`,taskId}]);
+    setHistory(h=>[...h,{id:`${Date.now()}-u`,role:"user",mode:"reviewer",content:`Review: Full Review`,taskId}]);
     try {
       const resp=await api(`${API}/chat`,{method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({session_id:sessionId,mode:"reviewer",message:`[Start Debate] Focus lens: ${lens}`,paper_ids:[],review_paper_id:pid,intervention_mode:"ask",history:[]})});
+        body:JSON.stringify({session_id:sessionId,mode:"reviewer",message:`[Start Debate] Focus lens: Full Review`,paper_ids:[],review_paper_id:pid,intervention_mode:"ask",history:[]})});
       setHistory(h=>[...h,{id:`${Date.now()}-a`,role:"assistant",mode:"reviewer",content:resp.answer,citations:normCites(resp.citations||[]),debug:resp.debug||{},taskId}]);
     } catch(err){setError(err.message||"Review failed.")} finally{setActiveTasks(t=>{const n={...t};delete n[taskId];return n;})}
   }
+
 
   async function runCompare() {
     if(!canCompare||loading)return;
@@ -877,7 +871,6 @@ function ResearchAgent() {
               loading={loading} canSend={Boolean(draft.trim())} currentMode={currentMode} activeMode={activeMode}
               onCompare={runCompare} onReview={runReview} canCompare={canCompare} canReview={canReview}
               selectedPapers={selectedPapers} reviewTargetPaper={reviewTarget}
-              reviewLens={reviewLens} onReviewLensChange={setReviewLens}
               comparatorPreset={compPreset} onCompPresetChange={setCompPreset}
               contextCount={selectedIds.length} />
           </div>
