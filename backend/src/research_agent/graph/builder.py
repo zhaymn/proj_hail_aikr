@@ -83,12 +83,16 @@ def _prepare_mode_step(state: GraphState) -> GraphState:
             "You are a research writing assistant that has studied this researcher's style. "
             "When drafting or rewriting, closely mirror the style profile provided: "
             "match their sentence length, formality level, hedging language, "
-            "vocabulary choices, and citation format. "
+            "and vocabulary choices. "
+            "IMPORTANT: Ignore citations and citation formats from the source papers; "
+            "the user will add their own citations later. Do not include any [n] or (Author, Year) markers. "
             "Do not default to generic academic prose - the output should be "
             "indistinguishable from the researcher's own writing. "
             "If no style profile exists yet, say so and ask the user to upload a paper first. "
             "Help with any writing task: drafting sections, rewriting sentences, "
-            "generating abstracts, or suggesting citation placements."
+            "generating abstracts, or suggesting citation placements. "
+            "CRITICAL: Do NOT include random citation placeholders like [n] or internal file markers like [filename.pdf] in the draft text. "
+            "Produce clean, publishable draft text that is ready to be used in a real paper."
         ),
         Mode.REVIEWER: (
             "You are a rigorous top-tier ML conference reviewer. "
@@ -910,7 +914,7 @@ def _best_role_sentence(text: str, *, role: str) -> str:
             best_score = score
             best = snippet
     threshold = 0.7 if role in {"summary", "method", "metric", "efficiency"} else 0.45
-    return _compact_turn_text(best, max_chars=260) if best_score >= threshold else ""
+    return _compact_turn_text(best, max_chars=800) if best_score >= threshold else ""
 
 
 def _best_citation_index_for_snippet(*, snippet: str, documents: list[Document], filename: str = "") -> int:
@@ -1046,7 +1050,7 @@ def _profile_benchmark_labels(profile: dict[str, Any]) -> list[str]:
 
 def _profile_method_signature(profile: dict[str, Any]) -> str:
     text = str(profile.get("method_sentence", "")).strip() or str(profile.get("summary_sentence", "")).strip()
-    return _compact_turn_text(text, max_chars=220) if text else "distinct method emphasis not recovered"
+    return _compact_turn_text(text, max_chars=800) if text else "distinct method emphasis not recovered"
 
 
 def _infer_paper_title(*, full_text: str, filename: str) -> str:
@@ -1806,12 +1810,38 @@ def _system_prompt(state: GraphState) -> str:
     )
 
     if mode == Mode.WRITER:
-        style_suffix = (
-            f"Stored style profile:\n{style_profile}"
-            if style_profile
-            else "No stored style profile is available yet. Use a clear academic style."
+        # Dynamic Style Profiling: If the user has selected papers, use their style specifically.
+        # This prevents research literature from polluting the writer's "voice".
+        selected_ids = state.get("selected_ids", [])
+        if selected_ids:
+            dynamic_style_parts = []
+            for paper_id in selected_ids:
+                paper_text = _read_paper_text(paper_id)
+                if paper_text:
+                    # Analyze the style of this specific paper
+                    dynamic_style_parts.append(_extract_volatile_style(paper_text[:12000]))
+            
+            if dynamic_style_parts:
+                style_profile = "\n\n".join(dynamic_style_parts)
+                style_suffix = f"Dynamic style profile (extracted from your selected papers):\n{style_profile}"
+            else:
+                style_suffix = "No text recovered from selected papers. Using standard academic style."
+        else:
+            style_suffix = (
+                f"Stored global style profile:\n{style_profile}"
+                if style_profile
+                else "No stored style profile is available yet. Use a clear academic style."
+            )
+        
+        writer_common = (
+            "\n\nGeneral rules for Writing Mode:\n"
+            "- Produce clean, ready-to-use draft text.\n"
+            "- Do NOT include internal markers like [filename.pdf] or placeholder citations like [n].\n"
+            "- CRITICAL: Do NOT include any citations (e.g., [1], (Smith, 2023), etc.) unless they are already present in the user's input text that you are rewriting.\n"
+            "- Ignore the citation style of the provided style profile; focus only on prose rhythm and vocabulary.\n"
+            "- Maintain the technical depth and flow of the style profile provided.\n"
         )
-        return f"{base}\n\n{style_suffix}{common}"
+        return f"{base}\n\n{style_suffix}{writer_common}"
 
     if mode == Mode.GLOBAL:
         return (
@@ -1819,6 +1849,44 @@ def _system_prompt(state: GraphState) -> str:
             "Keep the tone natural and helpful. Do not force paper citations unless the claim comes from paper context."
         )
     return f"{base}{common}"
+
+def _extract_volatile_style(text: str) -> str:
+    """Analyzes a text block to extract a writing style signature without persistent storage."""
+    cleaned = _clean_visible_text(text or "").strip()
+    if not cleaned:
+        return "Generic academic tone."
+    
+    # Try to use LLM for high-quality style extraction if available
+    if text_service.available:
+        try:
+            return text_service.generate(
+                system_prompt="You are a style analysis tool. Extract a concise writing style profile.",
+                user_prompt=(
+                    "Describe the writing style of this paper excerpt in 60 words or less. "
+                    "Focus on: sentence rhythm, formality, hedging (e.g. 'we found' vs 'it is possible'), "
+                    "and vocabulary complexity. "
+                    "IMPORTANT: Ignore citations and citation style entirely.\n\n"
+                    f"Excerpt:\n{cleaned[:5000]}"
+                ),
+                temperature=0.0,
+                max_output_tokens=150,
+            )
+        except Exception:
+            pass # Fallback to heuristic
+
+    # Heuristic fallback
+    sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", cleaned) if s.strip()]
+    avg_len = sum(len(s.split()) for s in sentences) // len(sentences) if sentences else 20
+    cit_style = "numeric [n]" if "[" in cleaned and "]" in cleaned else "author-year (Name, Year)"
+    formal_markers = sum(cleaned.lower().count(w) for w in ["propose", "methodology", "consequently", "demonstrate"])
+    tone = "formal and academic" if formal_markers > 5 else "direct and informative"
+    
+    return (
+        f"Tone: {tone}. Sentence length: ~{avg_len} words. "
+        f"Citations: {cit_style}. Vocabulary: technical. "
+        "Mirror this specific academic rhythm."
+    )
+
 
 
 def _format_context(documents: list[Document], max_docs: int | None = None) -> str:
@@ -2209,7 +2277,7 @@ def _comparator_structured_fallback(*, documents: list[Document]) -> str:
         metric_trail = _metric_trail(filename)
         method_blocks.append(
             f"### {filename}\n"
-            f"- Architecture signal: {_compact_turn_text(method_text, max_chars=220)} [{method_citation}]\n"
+            f"- Architecture signal: {_compact_turn_text(method_text, max_chars=800)} [{method_citation}]\n"
             + (
                 f"- Training / efficiency signal: {efficiency_text} [{efficiency_citation}]\n"
                 if efficiency_text
@@ -2809,7 +2877,7 @@ def _extract_metric_sentence(text: str) -> str:
         if score > best_score:
             best_score = score
             best = snippet
-    return _compact_turn_text(best, max_chars=240) if best_score >= 0.7 else ""
+    return _compact_turn_text(best, max_chars=800) if best_score >= 0.7 else ""
 
 
 def _clean_benchmark_candidate(text: str) -> str:
@@ -3579,10 +3647,10 @@ def _extract_signal_sentence(text: str) -> str:
             score += 0.15
         if score > best_score:
             best_score = score
-            best = snippet[:260]
+            best = snippet[:800]
     if best:
         return best
-    return cleaned[:260]
+    return cleaned[:800]
 
 
 def _clean_mojibake_text(text: str) -> str:
@@ -7603,13 +7671,13 @@ def _fallback_current_vector_report(
             f"Skeptic argues: {skeptic_short}",
         ],
         "common_points": [
-            f"The claim '{_compact_turn_text(claim, max_chars=60)}' targets a meaningful {category} question.",
+            f"The claim '{claim}' targets a meaningful {category} question.",
         ],
-        "skeptic_conclusion": f"The paper overstates '{_compact_turn_text(claim, max_chars=80)}' — {skeptic_short}",
-        "advocate_conclusion": f"The paper can defend '{_compact_turn_text(claim, max_chars=80)}' — {advocate_short}",
-        "joint_conclusion": f"On '{_compact_turn_text(claim, max_chars=60)}': the {category} contribution is directionally sound, but the claim-evidence gap identified by the skeptic needs closing before this specific point is reviewer-proof.",
+        "skeptic_conclusion": f"The paper overstates '{claim}' — {skeptic_short}",
+        "advocate_conclusion": f"The paper can defend '{claim}' — {advocate_short}",
+        "joint_conclusion": f"On '{claim}': the {category} contribution is directionally sound, but the claim-evidence gap identified by the skeptic needs closing before this specific point is reviewer-proof.",
         "author_action_plan": [
-            f"Rewrite the claim about '{_compact_turn_text(claim, max_chars=60)}' to match the exact reported scope.",
+            f"Rewrite the claim about '{claim}' to match the exact reported scope.",
             f"Add one explicit comparator or ablation that directly addresses the skeptic concern.",
             f"State one limitation boundary that acknowledges the gap between the claim and measured evidence.",
         ],
@@ -7741,7 +7809,6 @@ def _build_reviewer_final_report(
                 "Source: ONLY from claim_reports[].agreements\n"
                 "Process: collect all agreement signals → remove weak/generic → merge overlapping → rewrite into HIGH-DENSITY statements\n"
                 "Each agreement must preserve meaning from Phase 3 and NOT generalize into vague statements.\n"
-                "If long, compress 8-10 lines into 3-4 dense lines via MERGE + REWRITE (not deletion).\n"
                 "If no strong agreement signals: output 'No strong non-trivial agreements.'\n\n"
                 "SECTION 2 — DISAGREEMENTS (JUDGE-GUIDED AGGREGATION):\n"
                 "Source: claim_reports[] + judge_verdicts[]\n"
@@ -7749,10 +7816,7 @@ def _build_reviewer_final_report(
                 "For each: 'Claim: <label> | Advocate believes: <advocate_conclusion> | Skeptic argues: <skeptic_conclusion> | Core disagreement: <from disagreements> | Judge signal: <verdict + brief rationale>'\n"
                 "Do NOT rewrite meaning. Do NOT drop either side.\n\n"
                 "ANTI-BOILERPLATE: Reject any sentence that could apply to another paper or is not traceable to claim_reports.\n"
-                "Forbidden: 'promising contribution', 'needs better evaluation', 'clarity could improve'\n\n"
-                "ADAPTIVE COMPRESSION: If output is too long, compress agreements first (merge aggressively),\n"
-                "slightly shorten disagreement explanations, but KEEP all claims. NEVER cut mid-sentence.\n\n"
-                "FAILSAFE: If too long, fall back to: agreements=top 2 merged, disagreements='Advocate: <X> | Skeptic: <Y> | Issue: <Z>' per claim.\n"
+                "Forbidden: 'promising contribution', 'needs better evaluation', 'clarity could improve'\n"
             ),
             user_prompt=(
                 "=== JUDGE VERDICTS (Phase 2) ===\n"
@@ -7926,7 +7990,7 @@ def _fallback_reviewer_final_report(
         report = vector_reports.get(vector_id, {}) if isinstance(vector_reports, dict) else {}
         
         # Make the fallbacks claim-specific dynamically
-        claim_short = _compact_turn_text(claim, max_chars=80)
+        claim_short = claim
         skeptic_c = str(report.get("skeptic_conclusion", "")).strip() or f"The paper overstates the claim that '{claim_short}' — the current evidence is insufficient to fully support it."
         advocate_c = str(report.get("advocate_conclusion", "")).strip() or f"The claim that '{claim_short}' is directionally correct and defendable if scoped precisely to the measured evidence."
         
@@ -8043,13 +8107,13 @@ def _fallback_reviewer_final_report(
         verdict = str(vector_verdicts.get(vector_id, "contested"))
         if verdict in {"skeptic_prevailed", "contested"} and claim:
             if category == "novelty":
-                pressure_points.append(f"Novelty clarity: {_compact_turn_text(claim, max_chars=120)} — novelty delta against closest prior work is not explicitly scoped.")
+                pressure_points.append(f"Novelty clarity: {claim} — novelty delta against closest prior work is not explicitly scoped.")
             elif category in {"evaluation", "benchmark"}:
-                pressure_points.append(f"Empirical validation: {_compact_turn_text(claim, max_chars=120)} — claim blurs which benchmark slice actually supports it.")
+                pressure_points.append(f"Empirical validation: {claim} — claim blurs which benchmark slice actually supports it.")
             elif category in {"method", "assumption"}:
-                pressure_points.append(f"Comparison fairness: {_compact_turn_text(claim, max_chars=120)} — rationale for choosing this over nearby alternatives is incomplete.")
+                pressure_points.append(f"Comparison fairness: {claim} — rationale for choosing this over nearby alternatives is incomplete.")
             else:
-                pressure_points.append(f"Theoretical justification: {_compact_turn_text(claim, max_chars=120)} — evidence boundary for this claim needs tighter framing.")
+                pressure_points.append(f"Theoretical justification: {claim} — evidence boundary for this claim needs tighter framing.")
         if len(pressure_points) >= 4:
             break
 
@@ -8102,8 +8166,7 @@ def _fallback_reviewer_final_report(
 
 
 def _reviewer_claim_label(*, index: int, claim: str) -> str:
-    compact = _compact_turn_text(claim or "unspecified claim", max_chars=92)
-    return f"Claim {index} ({compact})"
+    return f"Claim {index} ({claim or 'unspecified claim'})"
 
 
 def _reviewer_residual_concerns(

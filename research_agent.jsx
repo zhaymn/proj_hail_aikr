@@ -55,7 +55,7 @@ function renderMd(content) {
   const fL=()=>{if(!lt||!li.length)return;const T=lt==="ol"?"ol":"ul";blocks.push(<T key={`l-${k++}`} className={`mb-3 ${lt==="ol"?"list-decimal":"list-disc"} pl-5 space-y-1 text-[var(--text-muted)]`}>{li.map((x,i)=><li key={i} className="leading-relaxed">{rInline(x)}</li>)}</T>);lt=null;li=[];};
   const pTC=r=>String(r||"").trim().replace(/^\|/,"").replace(/\|$/,"").split("|").map(c=>c.trim());
   const isS=c=>c.length>0&&c.every(x=>/^:?-{3,}:?$/.test(x));
-  const fT=()=>{if(!tr.length)return;const pr=tr.map(pTC).filter(c=>c.length>0);tr=[];const rows=pr.filter(c=>!isS(c));if(!rows.length)return;const h=rows[0],b=rows.slice(1);blocks.push(<div key={`t-${k++}`} className="my-3 overflow-x-auto rounded-2xl border border-[var(--border)]"><table className="w-full min-w-[500px] border-collapse"><thead><tr>{h.map((c,i)=><th key={i} className="border-b border-[var(--border)] bg-[rgba(0,255,159,0.03)] px-3 py-2 text-left text-xs font-bold text-white uppercase tracking-wider">{rInline(c)}</th>)}</tr></thead>{b.length?<tbody>{b.map((row,ri)=><tr key={ri} className="border-b border-[var(--border)] last:border-0">{h.map((_,ci)=><td key={ci} className="px-3 py-2 text-xs text-[var(--text-muted)]">{rInline(row[ci]||"")}</td>)}</tr>)}</tbody>:null}</table></div>);};
+  const fT=()=>{if(!tr.length)return;const pr=tr.map(pTC).filter(c=>c.length>0);tr=[];const rows=pr.filter(c=>!isS(c));if(!rows.length)return;const h=rows[0],b=rows.slice(1);blocks.push(<div key={`t-${k++}`} className="my-3 overflow-x-auto rounded-2xl border border-[var(--border)]"><table className="w-full min-w-[1000px] border-collapse"><thead><tr>{h.map((c,i)=><th key={i} className="border-b border-[var(--border)] bg-[rgba(0,255,159,0.03)] px-3 py-2 text-left align-top text-xs font-bold text-white uppercase tracking-wider">{rInline(c)}</th>)}</tr></thead>{b.length?<tbody>{b.map((row,ri)=><tr key={ri} className="border-b border-[var(--border)] last:border-0">{h.map((_,ci)=><td key={ci} className="px-3 py-2 text-xs align-top text-[var(--text-muted)]">{rInline(row[ci]||"")}</td>)}</tr>)}</tbody>:null}</table></div>);};
   const fM=()=>{if(!ml.length)return;const l=ml.join("\n").trim();ml=[];if(l)blocks.push(renderLatex(l,{displayMode:true,key:`m-${k++}`}));};
   for(const line of lines){const t=line.trim();if(inM){if((md==="$$"&&t==="$$")||(md==="\\["&&t==="\\]")){fM();inM=false;md="$$";}else ml.push(line);continue;}const sdm=t.match(/^\$\$(.+)\$\$$/),sbm=t.match(/^\\\[(.+)\\\]$/);if(sdm||sbm){fL();fT();const l=(sdm?sdm[1]:sbm[1]).trim();if(l)blocks.push(renderLatex(l,{displayMode:true,key:`ms-${k++}`}));continue;}if(t==="$$"||t==="\\["){fL();fT();inM=true;md=t==="\\["?"\\[":"$$";ml=[];continue;}if(!t){fL();fT();continue;}if(/^\|.*\|$/.test(t)){fL();tr.push(t);continue;}fT();const om=t.match(/^\s*(\d+)\.\s+(.+)/);if(om){if(lt&&lt!=="ol")fL();lt="ol";li.push(om[2]);continue;}const um=t.match(/^\s*[-*+]\s+(.+)/);if(um){if(lt&&lt!=="ul")fL();lt="ul";li.push(um[1]);continue;}fL();if(t.startsWith("### ")){blocks.push(<h3 key={`h3-${k++}`} className="text-base font-bold text-white mb-2 mt-4">{rInline(t.slice(4))}</h3>);continue;}if(t.startsWith("## ")){blocks.push(<h2 key={`h2-${k++}`} className="text-lg font-bold text-white mb-2 mt-4">{rInline(t.slice(3))}</h2>);continue;}if(t.startsWith("# ")){blocks.push(<h1 key={`h1-${k++}`} className="text-xl font-bold text-white mb-3 mt-4">{rInline(t.slice(2))}</h1>);continue;}blocks.push(<p key={`p-${k++}`} className="mb-2 text-[var(--text-muted)] leading-relaxed">{rInline(t)}</p>);}
   fM();fL();fT();
@@ -499,13 +499,12 @@ function ConversationStream({ history, activeTasks, activeMode, currentMode, cop
                             <span className="rounded-full bg-[rgba(0,255,159,0.08)] border border-[rgba(0,255,159,0.15)] px-2 py-0.5 text-[10px] font-bold text-[var(--green)]">{item.citations.length}</span>
                           </div>
                           <div className="space-y-1.5">
-                            {item.citations.slice(0,3).map((c,ci) => (
+                            {item.citations.map((c,ci) => (
                               <div key={ci} className="rounded-xl border border-[var(--border)] bg-[rgba(0,255,159,0.01)] px-3 py-2">
                                 <span className="text-[11px] font-medium text-[var(--green)] opacity-50">{c.filename||"Source"}</span>
                                 {c.snippet && <p className="text-[11px] text-[var(--text-dim)] mt-0.5 line-clamp-2">{c.snippet}</p>}
                               </div>
                             ))}
-                            {item.citations.length > 3 && <p className="text-[10px] text-[var(--text-dim)] px-1">+{item.citations.length-3} more</p>}
                           </div>
                         </div>
                       )}
@@ -608,14 +607,6 @@ function BottomBar({ draft, onChange, onKeyDown, onSend, onAttach, loading, canS
                 {selectedPapers.map(p => <span key={p.paper_id} className="inline-flex items-center gap-1 rounded-xl bg-[rgba(0,255,159,0.04)] border border-[rgba(0,255,159,0.12)] px-2 py-0.5 text-[10px] text-[var(--green)] font-medium truncate max-w-[180px]"><Icon name="file" className="w-3 h-3 shrink-0"/>{p.filename}</span>)}
               </div>
             )}
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-[10px] text-[var(--text-dim)] font-medium">Mode:</span>
-              {COMPARE_PRESETS.map(p => (
-                <button key={p.id} onClick={()=>onCompPresetChange(p.id)}
-                  className={`rounded-[10px] px-2.5 py-1 text-[11px] font-semibold border transition-all ${comparatorPreset===p.id ? "bg-[rgba(0,255,159,0.1)] text-[var(--green)] border-[rgba(0,255,159,0.2)]" : "text-[var(--text-dim)] border-[var(--border)] hover:border-[var(--border-2)]"}`}
-                  style={{transition:"all 0.25s cubic-bezier(0.16,1,0.3,1)"}}>{p.label}</button>
-              ))}
-            </div>
             <button onClick={onCompare} disabled={!valid||loading}
               className="w-full flex items-center justify-center gap-2 rounded-[12px] py-2.5 text-sm font-bold text-[#021a0f] disabled:opacity-20 disabled:cursor-not-allowed transition-all"
               style={{background:"linear-gradient(135deg, var(--green), #34d399)", boxShadow: valid&&!loading ? "0 8px 32px rgba(0,255,159,0.2)" : "none", transition:"all 0.25s cubic-bezier(0.16,1,0.3,1)"}}>
